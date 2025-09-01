@@ -44,3 +44,8 @@ build/
 *.orig
 # Büyük arşivleri commit etme
 *.zip
+
+# legacy admin backups
+admin_old/
+admin.bak/
+*.bak

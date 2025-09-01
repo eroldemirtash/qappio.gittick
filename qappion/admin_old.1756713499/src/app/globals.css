@@ -1,9 +1,0 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --sidebar-grad: linear-gradient(180deg,#081225 0%,#0f274b 60%,#0a3a6d 100%);
-}
-.body-bg { @apply bg-slate-50; }
-.card { @apply bg-white rounded-2xl shadow-card border border-slate-100; }
