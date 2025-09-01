@@ -1,5 +1,5 @@
 import { sbAdmin } from "@/lib/supabase-admin";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime="nodejs"; export const dynamic="force-dynamic"; export const revalidate=0;
 
@@ -26,14 +26,14 @@ export async function PATCH(
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
+    return NextResponse.json({ success: true }, {
+      headers: { "cache-control": "no-store" }
     });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { 
+    return NextResponse.json({ error: error.message }, { 
       status: 500,
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
+      headers: { "cache-control": "no-store" }
     });
   }
 }

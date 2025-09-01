@@ -18,13 +18,8 @@ export async function GET() {
 
     const s = sbAdmin();
     const { data, error } = await s
-      .from("brands")
-      .select(`
-        id, name, is_active, created_at,
-        brand_profiles (
-          id, avatar_url, cover_url, description, website_url, instagram_url, twitter_url
-        )
-      `)
+      .from("notifications")
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -54,39 +49,31 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const s = sbAdmin();
   const body = await request.json();
-  const { name, description, website_url, instagram_url, twitter_url } = body;
+  const { title, message, channel, scheduled_at, is_active } = body;
 
-  if (!name) {
-    return new Response(JSON.stringify({ error: "Name is required" }), { 
+  if (!title || !message || !channel) {
+    return new Response(JSON.stringify({ error: "Title, message and channel are required" }), { 
       status: 400,
       headers: { "content-type": "application/json" }
     });
   }
 
   try {
-    // Create brand
-    const { data: brand, error: brandError } = await s
-      .from("brands")
-      .insert({ name, is_active: true })
+    const { data: notification, error } = await s
+      .from("notifications")
+      .insert({
+        title,
+        message,
+        channel,
+        scheduled_at,
+        is_active: is_active || false
+      })
       .select()
       .single();
 
-    if (brandError) throw brandError;
+    if (error) throw error;
 
-    // Create brand profile
-    const { error: profileError } = await s
-      .from("brand_profiles")
-      .insert({
-        brand_id: brand.id,
-        description,
-        website_url,
-        instagram_url,
-        twitter_url
-      });
-
-    if (profileError) throw profileError;
-
-    return new Response(JSON.stringify({ success: true, brand }), {
+    return new Response(JSON.stringify({ success: true, notification }), {
       headers: { "content-type": "application/json", "cache-control": "no-store" }
     });
 

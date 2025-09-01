@@ -18,11 +18,13 @@ export async function GET() {
 
     const s = sbAdmin();
     const { data, error } = await s
-      .from("brands")
+      .from("missions")
       .select(`
-        id, name, is_active, created_at,
-        brand_profiles (
-          id, avatar_url, cover_url, description, website_url, instagram_url, twitter_url
+        id, title, description, brand_id, cover_url, reward_qp, published, 
+        is_qappio_of_week, starts_at, ends_at, created_at,
+        brand:brands (
+          id, name,
+          brand_profiles (avatar_url)
         )
       `)
       .order("created_at", { ascending: false });
@@ -54,39 +56,35 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const s = sbAdmin();
   const body = await request.json();
-  const { name, description, website_url, instagram_url, twitter_url } = body;
+  const { title, description, brand_id, cover_url, reward_qp, published, is_qappio_of_week, starts_at, ends_at } = body;
 
-  if (!name) {
-    return new Response(JSON.stringify({ error: "Name is required" }), { 
+  if (!title) {
+    return new Response(JSON.stringify({ error: "Title is required" }), { 
       status: 400,
       headers: { "content-type": "application/json" }
     });
   }
 
   try {
-    // Create brand
-    const { data: brand, error: brandError } = await s
-      .from("brands")
-      .insert({ name, is_active: true })
+    const { data: mission, error } = await s
+      .from("missions")
+      .insert({
+        title,
+        description,
+        brand_id,
+        cover_url,
+        reward_qp,
+        published: published || false,
+        is_qappio_of_week: is_qappio_of_week || false,
+        starts_at,
+        ends_at
+      })
       .select()
       .single();
 
-    if (brandError) throw brandError;
+    if (error) throw error;
 
-    // Create brand profile
-    const { error: profileError } = await s
-      .from("brand_profiles")
-      .insert({
-        brand_id: brand.id,
-        description,
-        website_url,
-        instagram_url,
-        twitter_url
-      });
-
-    if (profileError) throw profileError;
-
-    return new Response(JSON.stringify({ success: true, brand }), {
+    return new Response(JSON.stringify({ success: true, mission }), {
       headers: { "content-type": "application/json", "cache-control": "no-store" }
     });
 
