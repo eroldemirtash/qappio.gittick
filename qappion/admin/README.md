@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Qappio Admin Panel
 
-## Getting Started
+Modern admin panel for Qappio platform built with Next.js 15, TypeScript, and Tailwind CSS.
 
-First, run the development server:
+## Setup
 
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Copy environment variables:
+```bash
+cp .env.example .env.local
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Update `.env.local` with your Supabase credentials:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Run development server:
+```bash
+npm run dev
+```
 
-## Learn More
+The admin panel will be available at http://localhost:3010
 
-To learn more about Next.js, take a look at the following resources:
+## Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Dashboard**: Real-time statistics from Supabase
+- **Brand Management**: Create, list, and toggle brand status
+- **Modern UI**: Dark sidebar with gradient, soft shadows, rounded corners
+- **Responsive Design**: Works on desktop and tablet
+- **TypeScript**: Full type safety
+- **Tailwind CSS**: Modern styling with custom brand colors
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Endpoints
 
-## Deploy on Vercel
+- `GET /api/stats` - Dashboard statistics
+- `GET /api/brands` - List all brands
+- `POST /api/brands` - Create new brand
+- `PATCH /api/brands/[id]` - Update brand status
+- `PATCH /api/brands/[id]/profile` - Update brand profile
+- `POST /api/storage/brand-assets` - Upload brand assets
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Database Schema
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The admin panel expects these Supabase tables:
+- `brands` - Brand information
+- `brand_profiles` - Brand profile details
+- `missions` - Mission data
+- `profiles` - User profiles
+- `mission_participations` - User participations
+
+## Deployment
+
+Deploy to Vercel with the following settings:
+- **Build Command**: `npm run build`
+- **Output Directory**: `.next`
+- **Install Command**: `npm install`
+- **Environment Variables**: Copy from `.env.local`
