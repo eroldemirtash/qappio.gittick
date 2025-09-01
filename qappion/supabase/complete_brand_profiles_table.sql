@@ -1,0 +1,147 @@
+-- Complete brand_profiles table with all required columns
+-- Run this in Supabase Studio → SQL Editor
+
+-- Add missing columns to brand_profiles table
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS handle text UNIQUE NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS display_name text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS description text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS email text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS phone text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS website text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS category text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS founded_year int NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS address text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS instagram text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS twitter text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS facebook text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS linkedin text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS license_plan text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS license_start date NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS license_end date NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS license_fee numeric(12,2) NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS feat_mission_create boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS feat_user_mgmt boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS feat_analytics boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS feat_api_access boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS feat_priority_support boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS avatar_url text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS cover_url text NULL;
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
+ALTER TABLE public.brand_profiles 
+ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+-- Create updated_at trigger if it doesn't exist
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN 
+  NEW.updated_at = now(); 
+  RETURN NEW; 
+END $$;
+
+-- Drop existing trigger if exists and create new one
+DROP TRIGGER IF EXISTS trg_brand_profiles_updated_at ON public.brand_profiles;
+CREATE TRIGGER trg_brand_profiles_updated_at 
+  BEFORE UPDATE ON public.brand_profiles
+  FOR EACH ROW 
+  EXECUTE FUNCTION public.set_updated_at();
+
+-- Create function to auto-create brand profile
+CREATE OR REPLACE FUNCTION public.create_brand_profile_on_brand_insert()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.brand_profiles (brand_id, display_name)
+  VALUES (NEW.id, NEW.name)
+  ON CONFLICT (brand_id) DO NOTHING;
+  RETURN NEW;
+END $$;
+
+-- Create trigger for auto-creating brand profiles
+DROP TRIGGER IF EXISTS trg_brands_after_insert ON public.brands;
+CREATE TRIGGER trg_brands_after_insert
+  AFTER INSERT ON public.brands
+  FOR EACH ROW 
+  EXECUTE FUNCTION public.create_brand_profile_on_brand_insert();
+
+-- Enable RLS
+ALTER TABLE public.brand_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies and create new ones
+DROP POLICY IF EXISTS "read brand profiles" ON public.brand_profiles;
+CREATE POLICY "read brand profiles" ON public.brand_profiles 
+  FOR SELECT TO anon, authenticated 
+  USING (true);
+
+DROP POLICY IF EXISTS "write brand profiles" ON public.brand_profiles;
+CREATE POLICY "write brand profiles" ON public.brand_profiles
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','brand_manager')))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','brand_manager')));
+
+-- Create storage bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('brand-assets','brand-assets', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage policies
+DROP POLICY IF EXISTS "brand-assets read" ON storage.objects;
+CREATE POLICY "brand-assets read"
+ON storage.objects FOR SELECT TO anon, authenticated
+USING (bucket_id = 'brand-assets');
+
+DROP POLICY IF EXISTS "brand-assets write" ON storage.objects;
+CREATE POLICY "brand-assets write"
+ON storage.objects FOR ALL TO authenticated
+WITH CHECK (
+  bucket_id = 'brand-assets'
+  AND EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','brand_manager'))
+);

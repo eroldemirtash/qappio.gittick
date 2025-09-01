@@ -153,3 +153,17 @@ create trigger update_submissions_updated_at before update on submissions
 
 create trigger update_redemptions_updated_at before update on redemptions
   for each row execute procedure update_updated_at_column();
+
+-- NOTIFICATIONS
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  body text not null,
+  type text check (type in ('info','success','warning','error')) default 'info',
+  is_active boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create trigger update_notifications_updated_at before update on notifications
+  for each row execute procedure update_updated_at_column();
