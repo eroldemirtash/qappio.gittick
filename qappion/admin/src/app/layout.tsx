@@ -24,7 +24,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
     <html lang="tr">
       <body className="body-bg min-h-dvh">
         <div className="grid grid-cols-[260px_1fr] min-h-dvh">
-          <aside className="text-slate-100" style={{background:"var(--sidebar-grad)"}}>
+          <aside className="text-slate-100 sticky top-0 h-screen overflow-y-auto" style={{background:"var(--sidebar-grad)"}}>
             <div className="px-5 py-6 flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 grid place-items-center text-white text-lg font-bold">Q</div>
               <div className="text-xl font-semibold">Qappio</div>

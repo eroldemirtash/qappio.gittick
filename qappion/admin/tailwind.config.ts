@@ -6,9 +6,13 @@ export default {
     extend: {
       colors: {
         brand: {
-          50:"#eef9ff",100:"#d7f1ff",200:"#afe3ff",300:"#7cd1ff",400:"#46bcff",
-          500:"#1da6ff",600:"#0589e4",700:"#006db8",800:"#055a94",900:"#0a4876"
-        }
+          50:"#eef7ff",100:"#d8edff",200:"#b9e0ff",300:"#8dd0ff",400:"#5bbaff",
+          500:"#2da2ff",600:"#1b8ae6",700:"#0f6fbe",800:"#0c5796",900:"#0a4876"
+        },
+        slate: require('tailwindcss/colors').slate,
+        emerald: require('tailwindcss/colors').emerald,
+        amber: require('tailwindcss/colors').amber,
+        rose: require('tailwindcss/colors').rose,
       },
       boxShadow: {
         card:"0 10px 30px rgba(2,14,40,.08), 0 4px 12px rgba(2,14,40,.06)"

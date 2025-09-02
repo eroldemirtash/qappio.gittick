@@ -5,5 +5,15 @@
 :root {
   --sidebar-grad: linear-gradient(180deg,#081225 0%,#0f274b 60%,#0a3a6d 100%);
 }
-.body-bg { @apply bg-slate-50; }
-.card { @apply bg-white rounded-2xl shadow-card border border-slate-100; }
+
+@layer components {
+  .body-bg { @apply bg-slate-50; }
+  .card { @apply bg-white rounded-2xl shadow-card border border-slate-100; }
+  .stat { @apply card p-5 flex items-start justify-between; }
+  .toolbar { @apply flex flex-wrap gap-3 items-center; }
+  .page { @apply space-y-6; }
+  .page-title { @apply text-2xl font-semibold; }
+  .btn { @apply px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50; }
+  .btn-ghost { @apply px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50; }
+  .badge { @apply px-2 py-0.5 text-xs rounded-full bg-slate-100; }
+}

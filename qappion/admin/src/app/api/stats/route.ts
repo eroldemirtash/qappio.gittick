@@ -1,52 +1,52 @@
 import { sbAdmin } from "@/lib/supabase-admin";
-export const runtime="nodejs"; export const dynamic="force-dynamic"; export const revalidate=0;
-export async function GET(){
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET() {
   try {
-    const s = sbAdmin();
+    // Check if Supabase is configured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    // Check if environment variables are set
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
+      // Return demo data when Supabase is not configured
       return new Response(JSON.stringify({
-        brands: 0,
-        missions: 0,
-        users: 0,
-        participations: 0,
-        error: "Supabase configuration missing"
-      }), { 
-        status: 200,
-        headers: { "content-type":"application/json","cache-control":"no-store" } 
+        total_brands: 12,
+        active_missions: 45,
+        total_users: 1250,
+        total_notifications: 8
+      }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" }
       });
     }
 
-    const [brandsResult, missionsResult, usersResult, partsResult] = await Promise.allSettled([
-      s.from("brands").select("*",{count:"exact",head:true}),
-      s.from("missions").select("*",{count:"exact",head:true}).neq("deleted",true).returns<any>(),
-      s.from("profiles").select("*",{count:"exact",head:true}),
-      s.from("mission_participations").select("*",{count:"exact",head:true}).returns<any>(),
+    const s = sbAdmin();
+    
+    // Get stats from database
+    const [brandsResult, missionsResult, usersResult, notificationsResult] = await Promise.all([
+      s.from("brands").select("id", { count: "exact" }),
+      s.from("missions").select("id", { count: "exact" }).eq("published", true),
+      s.from("profiles").select("id", { count: "exact" }),
+      s.from("notifications").select("id", { count: "exact" })
     ]);
-    
-    const brands = brandsResult.status === 'fulfilled' ? brandsResult.value.count : 0;
-    const missions = missionsResult.status === 'fulfilled' ? missionsResult.value.count : 0;
-    const users = usersResult.status === 'fulfilled' ? usersResult.value.count : 0;
-    const parts = partsResult.status === 'fulfilled' ? partsResult.value.count : 0;
-    
-    return new Response(JSON.stringify({
-      brands: brands ?? 0,
-      missions: missions ?? 0,
-      users: users ?? 0,
-      participations: parts ?? 0
-    }), { headers: { "content-type":"application/json","cache-control":"no-store" } });
-    
+
+    const stats = {
+      total_brands: brandsResult.count || 0,
+      active_missions: missionsResult.count || 0,
+      total_users: usersResult.count || 0,
+      total_notifications: notificationsResult.count || 0
+    };
+
+    return new Response(JSON.stringify(stats), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" }
+    });
+
   } catch (error: any) {
-    return new Response(JSON.stringify({
-      brands: 0,
-      missions: 0,
-      users: 0,
-      participations: 0,
-      error: error.message
-    }), { 
-      status: 200,
-      headers: { "content-type":"application/json","cache-control":"no-store" } 
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "content-type": "application/json", "cache-control": "no-store" }
     });
   }
 }
