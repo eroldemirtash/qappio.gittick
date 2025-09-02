@@ -8,7 +8,7 @@ cat .env.local | grep SUPABASE_URL
 # Beklenen: https://euscyxsglpwadhzvjazn.supabase.co
 
 # Mobile  
-cd qappion/mobile
+cd ../../mobile
 cat .env | grep SUPABASE_URL
 # Beklenen: https://euscyxsglpwadhzvjazn.supabase.co
 ```
@@ -24,7 +24,7 @@ cat .env | grep SUPABASE_URL
 
 ## 4) Mobil App Test
 ```bash
-cd qappion/mobile
+cd ../../mobile
 npx expo start --tunnel --clear
 ```
 

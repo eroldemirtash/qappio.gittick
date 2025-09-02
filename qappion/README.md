@@ -50,7 +50,7 @@ psql -h your-project.supabase.co -U postgres -d postgres < supabase/seed.sql
 ### 2. Mobile App
 
 ```bash
-cd "/Users/eroldemirtas/Qappio-Gittick/qappion/mobile"
+cd "/Users/eroldemirtas/Qappio-Gittick/mobile"
 cp .env.example .env
 # .env dosyasını Supabase bilgileriyle güncelle
 
@@ -106,7 +106,7 @@ user_balances    # lifetime_earned_qp, spendable_qp
 
 ### Mobile Hot Reload
 ```bash
-cd "/Users/eroldemirtas/Qappio-Gittick/qappion/mobile"
+cd "/Users/eroldemirtas/Qappio-Gittick/mobile"
 npx expo start -c --tunnel  # Clear cache
 ```
 
