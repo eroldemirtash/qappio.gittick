@@ -15,20 +15,21 @@ export async function GET(req: Request) {
         name,
         is_active,
         created_at,
-        description,
-        website,
-        email,
-        phone,
-        category,
-        brand_profiles (
+        brand_profiles!left(
           display_name,
           category,
-          description,
           email,
           phone,
           website,
-          avatar_url,
-          license_plan
+          license_plan,
+          license_start,
+          license_end,
+          license_fee,
+          features,
+          address,
+          description,
+          logo_url,
+          cover_url
         )
       `)
       .order("created_at", { ascending: false })
@@ -104,11 +105,6 @@ export async function POST(request: NextRequest) {
       .from("brands")
       .insert({ 
         name, 
-        description: description || null,
-        website: website || null,
-        email: email || null,
-        phone: phone || null,
-        category: category || null,
         is_active: !!is_active 
       })
       .select()

@@ -56,7 +56,8 @@ export async function POST(
       description: body.description,
       email: body.email,
       phone: body.phone,
-      avatar_url: body.avatar_url,
+      logo_url: body.logo_url || body.avatar_url, // Support both fields
+      avatar_url: body.logo_url || body.avatar_url, // Keep both for compatibility
       cover_url: body.cover_url,
       website: body.website,
       social_instagram: body.social_instagram,
@@ -142,10 +143,17 @@ export async function GET(
       .from("brand_profiles")
       .select("*")
       .eq("brand_id", resolvedParams.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    if (!data) {
+      return new Response(JSON.stringify({ error: "Brand profile not found" }), {
         status: 404,
         headers: { "content-type": "application/json" }
       });

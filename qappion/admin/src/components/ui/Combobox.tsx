@@ -131,10 +131,21 @@ export function Combobox({
           onKeyDown={handleKeyDown}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
-          className={`w-full h-10 px-3 pr-20 rounded-xl border ${
+          className={`w-full h-10 ${selectedOption?.avatar ? 'pl-10' : 'pl-3'} pr-20 rounded-xl border ${
             error ? "border-rose-500" : "border-slate-200"
           } bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent ${className}`}
         />
+        
+        {/* Selected Avatar */}
+        {selectedOption?.avatar && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+            <img
+              src={selectedOption.avatar}
+              alt=""
+              className="h-6 w-6 rounded-full object-cover"
+            />
+          </div>
+        )}
         
         <div className="absolute right-1 top-1 flex items-center gap-1">
           {inputValue && (

@@ -54,11 +54,38 @@ export function BrandDetailModal({
       if (response.success) {
         setStats(response.data);
       } else {
-        setError('İstatistikler yüklenemedi');
+        // Hata durumunda varsayılan değerler
+        setStats({
+          totalMissions: 0,
+          activeMissions: 0,
+          users: 0,
+          totalShares: 0,
+          followers: 0,
+          balance: 0,
+          performance: {
+            sharesPerMission: 0,
+            missionsPerUser: 0,
+            averageBalance: 0
+          }
+        });
+        console.warn('Stats API failed, using defaults:', response.error);
       }
     } catch (err) {
-      setError('İstatistikler yüklenemedi');
-      console.error('Stats fetch error:', err);
+      // Hata durumunda varsayılan değerler
+      setStats({
+        totalMissions: 0,
+        activeMissions: 0,
+        users: 0,
+        totalShares: 0,
+        followers: 0,
+        balance: 0,
+        performance: {
+          sharesPerMission: 0,
+          missionsPerUser: 0,
+          averageBalance: 0
+        }
+      });
+      console.warn('Stats fetch error, using defaults:', err);
     } finally {
       setLoading(false);
     }

@@ -1,60 +1,121 @@
-import { View, Text, ScrollView, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, Pressable, Alert } from 'react-native';
+import { useEffect, useState, useLayoutEffect } from 'react';
+import { useNavigation } from 'expo-router';
+import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/store/useAuth';
-import { useRouter } from 'expo-router';
+import { maybeRegisterPush } from '@/src/utils/push';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const { user, profile, signOut } = useAuth();
-  const router = useRouter();
+  const [pushToken, setPushToken] = useState<string | null>(null);
 
-  const handleLogout = async () => {
-    await signOut();
-    router.replace('/(auth)/login');
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: 'Profil' });
+  }, [navigation]);
+
+  useEffect(() => {
+    // Push notifications tamamen devre dışı
+    console.log('Push notifications disabled');
+  }, []);
+
+  const registerForPushNotifications = async () => {
+    try {
+      const token = await maybeRegisterPush();
+      if (token) {
+        setPushToken(token.data);
+      }
+
+      // Save token to profile
+      if (user && token) {
+        await supabase
+          .from('profiles')
+          .update({ push_token: token.data })
+          .eq('id', user.id);
+      }
+    } catch (error) {
+      console.error('Push notification setup error:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Çıkış Yap',
+      'Hesabınızdan çıkış yapmak istediğinizden emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Çıkış Yap', 
+          style: 'destructive',
+          onPress: signOut
+        }
+      ]
+    );
   };
 
   return (
-    <ScrollView className="flex-1 bg-bg">
-      <View className="px-6 py-8">
+    <View className="flex-1 bg-slate-900">
+      <View className="p-6">
         {/* Profile Header */}
         <View className="items-center mb-8">
-          <View className="w-24 h-24 rounded-full bg-primary/20 items-center justify-center mb-4">
-            <Ionicons name="person" size={48} color="#00bcd4" />
-          </View>
-          <Text className="text-2xl font-bold text-text mb-1">
+          <View className="w-24 h-24 bg-gray-500 rounded-full mb-4" />
+          <Text className="text-slate-200 text-xl font-bold mb-2">
             {profile?.display_name || 'Kullanıcı'}
           </Text>
-          <Text className="text-sub">{profile?.city || 'Şehir belirtilmemiş'}</Text>
+          <Text className="text-slate-400 text-base">
+            {profile?.city || 'Şehir belirtilmemiş'}
+          </Text>
         </View>
 
-        {/* Menu Items */}
-        <View className="space-y-2">
-          <Pressable className="bg-card rounded-xl p-4 flex-row items-center">
-            <Ionicons name="settings-outline" size={24} color="#e5e7eb" />
-            <Text className="text-text font-semibold ml-4">Ayarlar</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94a3b8" className="ml-auto" />
-          </Pressable>
+        {/* Profile Info */}
+        <View className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
+          <Text className="text-slate-200 font-semibold mb-3 text-base">Profil Bilgileri</Text>
+          <View className="gap-2">
+            <View className="flex-row justify-between items-center">
+              <Text className="text-slate-400 text-sm">Email</Text>
+              <Text className="text-slate-200 text-sm">{user?.email}</Text>
+            </View>
+            <View className="flex-row justify-between items-center">
+              <Text className="text-slate-400 text-sm">Seviye</Text>
+              <Text className="text-slate-200 text-sm">{profile?.level_name || 'Başlangıç'}</Text>
+            </View>
+            <View className="flex-row justify-between items-center">
+              <Text className="text-slate-400 text-sm">Push Bildirimler</Text>
+              <Text className="text-slate-200 text-sm">
+                {pushToken ? 'Açık' : 'Kapalı'}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-          <Pressable className="bg-card rounded-xl p-4 flex-row items-center">
-            <Ionicons name="help-circle-outline" size={24} color="#e5e7eb" />
-            <Text className="text-text font-semibold ml-4">Yardım</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94a3b8" className="ml-auto" />
+        {/* Actions */}
+        <View className="gap-3">
+          <Pressable className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <Text className="text-slate-200 font-medium text-base">Hesap Ayarları</Text>
           </Pressable>
-
-          <Pressable className="bg-card rounded-xl p-4 flex-row items-center">
-            <Ionicons name="information-circle-outline" size={24} color="#e5e7eb" />
-            <Text className="text-text font-semibold ml-4">Hakkında</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94a3b8" className="ml-auto" />
+          
+          <Pressable className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <Text className="text-slate-200 font-medium text-base">Gizlilik</Text>
           </Pressable>
-
-          <Pressable 
-            className="bg-danger/10 rounded-xl p-4 flex-row items-center"
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-            <Text className="text-danger font-semibold ml-4">Çıkış Yap</Text>
+          
+          <Pressable className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <Text className="text-slate-200 font-medium text-base">Yardım & Destek</Text>
+          </Pressable>
+          
+          <Pressable className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <Text className="text-slate-200 font-medium text-base">Hakkında</Text>
           </Pressable>
         </View>
+
+        {/* Logout Button */}
+        <Pressable
+          onPress={handleLogout}
+          className="bg-red-500 p-4 rounded-xl mt-8"
+        >
+          <Text className="text-white font-medium text-center text-base">Çıkış Yap</Text>
+        </Pressable>
       </View>
-    </ScrollView>
+    </View>
   );
 }
+

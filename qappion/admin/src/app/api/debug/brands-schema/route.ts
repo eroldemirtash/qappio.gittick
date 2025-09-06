@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     return Response.json({ 
       brands: brandsData,
       profiles: profilesData,
-      brandsError: brandsError?.message,
+      brandsError: brandsError ? String(brandsError) : null,
       profilesError: profilesError?.message
     }, { headers: { "cache-control": "no-store" }});
     

@@ -5,6 +5,47 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+export async function GET(request: NextRequest) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const url = new URL(request.url);
+    const brandId = url.searchParams.get('brand_id');
+    if (!brandId) {
+      return new Response(JSON.stringify({ item: null }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
+
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
+      return new Response(JSON.stringify({ item: null }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
+
+    const s = sbAdmin();
+    const { data, error } = await s
+      .from('brand_profiles')
+      .select('*')
+      .eq('brand_id', brandId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return new Response(JSON.stringify({ item: data || null }), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

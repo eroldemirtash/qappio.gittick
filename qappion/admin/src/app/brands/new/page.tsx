@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { jpost, jget, jpatch } from "@/lib/fetcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -59,6 +59,7 @@ export default function BrandNewPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
   
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<FormVals>({
     resolver: zodResolver(Schema),
@@ -69,6 +70,36 @@ export default function BrandNewPage() {
   const selectedBrandId = watch("brand_id");
   const logoUrl = watch("logo_url");
   const coverUrl = watch("cover_url");
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleUpload(file: File, type: "logo" | "cover") {
+    console.log('handleUpload called with:', { file, type });
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("brandId", selectedBrandId || "temp-brand");
+      form.append("type", type === "logo" ? "avatar" : "cover");
+      console.log('Uploading to /api/storage/brand-assets');
+      const res = await fetch("/api/storage/brand-assets", { method: "POST", body: form });
+      const json = await res.json();
+      console.log('Upload response:', { res, json });
+      if (!res.ok) throw new Error(json?.error || "Upload failed");
+      const cacheBustedUrl = `${json.url}?t=${Date.now()}`;
+      if (type === "logo") {
+        setValue("logo_url", cacheBustedUrl, { shouldValidate: true });
+        console.log('Logo URL updated to:', cacheBustedUrl);
+      } else {
+        setValue("cover_url", cacheBustedUrl, { shouldValidate: true });
+        console.log('Cover URL updated to:', cacheBustedUrl);
+      }
+      setForceUpdate(prev => prev + 1); // Force component re-render
+      toast.success("Görsel yüklendi");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      toast.error(e?.message || "Yükleme başarısız");
+    }
+  }
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -307,14 +338,27 @@ export default function BrandNewPage() {
               {...register("logo_url")}
               placeholder="https://example.com/logo.png"
             />
+            <div className="mt-2">
+              <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={(e) => { 
+                console.log('Logo file selected:', e.target.files?.[0]);
+                const f = e.target.files?.[0]; 
+                if (f) handleUpload(f, "logo"); 
+              }} />
+              <Button type="button" variant="outline" onClick={() => {
+                console.log('Logo upload button clicked');
+                logoInputRef.current?.click();
+              }}>PC'den yükle</Button>
+            </div>
             {logoUrl && (
               <div className="mt-2">
                 <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
                 <img 
-                  src={logoUrl} 
+                  key={`${logoUrl}-${forceUpdate}`} // Force re-render when URL changes
+                  src={`${logoUrl}?t=${Date.now()}`} // Cache busting
                   alt="Logo önizleme" 
                   className="w-16 h-16 object-cover rounded-lg border border-slate-200"
                   onError={(e) => {
+                    console.error('Logo preview failed to load:', logoUrl);
                     e.currentTarget.style.display = 'none';
                   }}
                 />
@@ -328,14 +372,27 @@ export default function BrandNewPage() {
               {...register("cover_url")}
               placeholder="https://example.com/cover.png"
             />
+            <div className="mt-2">
+              <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={(e) => { 
+                console.log('Cover file selected:', e.target.files?.[0]);
+                const f = e.target.files?.[0]; 
+                if (f) handleUpload(f, "cover"); 
+              }} />
+              <Button type="button" variant="outline" onClick={() => {
+                console.log('Cover upload button clicked');
+                coverInputRef.current?.click();
+              }}>PC'den yükle</Button>
+            </div>
             {coverUrl && (
               <div className="mt-2">
                 <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
                 <img 
-                  src={coverUrl} 
+                  key={`${coverUrl}-${forceUpdate}`} // Force re-render when URL changes
+                  src={`${coverUrl}?t=${Date.now()}`} // Cache busting
                   alt="Cover önizleme" 
                   className="w-full h-24 object-cover rounded-lg border border-slate-200"
                   onError={(e) => {
+                    console.error('Cover preview failed to load:', coverUrl);
                     e.currentTarget.style.display = 'none';
                   }}
                 />

@@ -3,54 +3,51 @@ import { sbAdmin } from "@/lib/supabase-admin";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const brandId = params.id;
+    const { id: brandId } = await params;
 
     // Missions count
-    const { count: missionsCount } = await sbAdmin
+    const { count: missionsCount } = await sbAdmin()
       .from('missions')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId);
 
     // Active missions count
-    const { count: activeMissionsCount } = await sbAdmin
+    const { count: activeMissionsCount } = await sbAdmin()
       .from('missions')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId)
       .eq('published', true);
 
     // Users count (mission participations)
-    const { count: usersCount } = await sbAdmin
+    const { data: missionIds } = await sbAdmin()
+      .from('missions')
+      .select('id')
+      .eq('brand_id', brandId);
+    
+    const missionIdList = missionIds?.map(m => m.id) || [];
+    
+    const { count: usersCount } = await sbAdmin()
       .from('mission_participations')
       .select('user_id', { count: 'exact', head: true })
-      .in('mission_id', 
-        sbAdmin
-          .from('missions')
-          .select('id')
-          .eq('brand_id', brandId)
-      );
+      .in('mission_id', missionIdList);
 
     // Total shares count
-    const { count: sharesCount } = await sbAdmin
+    const { count: sharesCount } = await sbAdmin()
       .from('shares')
       .select('*', { count: 'exact', head: true })
-      .in('mission_id',
-        sbAdmin
-          .from('missions')
-          .select('id')
-          .eq('brand_id', brandId)
-      );
+      .in('mission_id', missionIdList);
 
     // Followers count (brand follows)
-    const { count: followersCount } = await sbAdmin
+    const { count: followersCount } = await sbAdmin()
       .from('brand_follows')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId);
 
     // Balance (from brand_profiles or calculate from transactions)
-    const { data: brandProfile } = await sbAdmin
+    const { data: brandProfile } = await sbAdmin()
       .from('brand_profiles')
       .select('balance')
       .eq('brand_id', brandId)

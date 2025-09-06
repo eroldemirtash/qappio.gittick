@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { jpost, jget } from "@/lib/fetcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -102,6 +102,7 @@ const Schema = z.object({
     }
   }, "Geçerli URL girin"),
   logo_url: z.string().optional(),
+  avatar_url: z.string().optional(),
   cover_url: z.string().optional()
 });
 
@@ -120,8 +121,9 @@ export default function BrandProfileNewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
   
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<FormVals>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch, trigger } = useForm<FormVals>({
     resolver: zodResolver(Schema),
     defaultValues: {
       license_plan: "freemium",
@@ -138,6 +140,42 @@ export default function BrandProfileNewPage() {
   const features = watch("features");
   const logoUrl = watch("logo_url");
   const coverUrl = watch("cover_url");
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleUpload(file: File, type: "logo" | "cover") {
+    console.log('handleUpload called with:', { file, type });
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("brandId", selectedBrandId || "temp-brand");
+      form.append("type", type === "logo" ? "avatar" : "cover");
+      console.log('Uploading to /api/storage/brand-assets');
+      const res = await fetch("/api/storage/brand-assets", { method: "POST", body: form });
+      const json = await res.json();
+      console.log('Upload response:', { res, json });
+      if (!res.ok) throw new Error(json?.error || "Upload failed");
+      
+      // Update form state and trigger re-render
+      const cacheBustedUrl = `${json.url}?t=${Date.now()}`;
+      if (type === "logo") {
+        setValue("logo_url", cacheBustedUrl, { shouldValidate: true });
+        setValue("avatar_url", cacheBustedUrl, { shouldValidate: true }); // Also update avatar_url
+        console.log('Logo URL updated to:', cacheBustedUrl);
+      } else {
+        setValue("cover_url", cacheBustedUrl, { shouldValidate: true });
+        console.log('Cover URL updated to:', cacheBustedUrl);
+      }
+      
+      // Force form re-render to show preview
+      await trigger();
+      setForceUpdate(prev => prev + 1); // Force component re-render
+      toast.success("Görsel yüklendi");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      toast.error(e?.message || "Yükleme başarısız");
+    }
+  }
 
   // Edit modunu kontrol et
   useEffect(() => {
@@ -178,7 +216,7 @@ export default function BrandProfileNewPage() {
               setValue("social_twitter", profile.social_twitter || "");
               setValue("social_facebook", profile.social_facebook || "");
               setValue("social_linkedin", profile.social_linkedin || "");
-              setValue("logo_url", profile.avatar_url || "");
+              setValue("logo_url", profile.logo_url || profile.avatar_url || "");
               setValue("cover_url", profile.cover_url || "");
               
               if (profile.features) {
@@ -207,7 +245,7 @@ export default function BrandProfileNewPage() {
             setValue("social_twitter", profile.social_twitter || "");
             setValue("social_facebook", profile.social_facebook || "");
             setValue("social_linkedin", profile.social_linkedin || "");
-            setValue("logo_url", profile.avatar_url || "");
+            setValue("logo_url", profile.logo_url || profile.avatar_url || "");
             setValue("cover_url", profile.cover_url || "");
             
             if (profile.features) {
@@ -510,19 +548,34 @@ export default function BrandProfileNewPage() {
               {...register("logo_url")}
               placeholder="https://example.com/logo.png"
             />
-            {logoUrl && (
-              <div className="mt-2">
-                <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
-                <img 
-                  src={logoUrl} 
-                  alt="Logo önizleme" 
-                  className="w-16 h-16 object-cover rounded-lg border border-slate-200"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
+            <div className="mt-2">
+              <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={(e) => {
+                console.log('Logo file selected:', e.target.files?.[0]);
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f, "logo"); 
+              }} />
+              <Button type="button" variant="outline" onClick={() => {
+                console.log('Logo upload button clicked');
+                logoInputRef.current?.click();
+              }}>PC'den yükle</Button>
+              
+              {/* Logo Preview */}
+              {logoUrl && (
+                <div className="mt-2">
+                  <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
+                  <img 
+                    key={`${logoUrl}-${forceUpdate}`} // Force re-render when URL changes
+                    src={`${logoUrl}?t=${Date.now()}`} // Cache busting
+                    alt="Logo önizleme" 
+                    className="w-16 h-16 object-cover rounded-lg border border-slate-200"
+                    onError={(e) => {
+                      console.error('Logo preview failed to load:', logoUrl);
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Kapak URL</label>
@@ -530,19 +583,34 @@ export default function BrandProfileNewPage() {
               {...register("cover_url")}
               placeholder="https://example.com/cover.png"
             />
-            {coverUrl && (
-              <div className="mt-2">
-                <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
-                <img 
-                  src={coverUrl} 
-                  alt="Cover önizleme" 
-                  className="w-full h-24 object-cover rounded-lg border border-slate-200"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
+            <div className="mt-2">
+              <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={(e) => {
+                console.log('Cover file selected:', e.target.files?.[0]);
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f, "cover"); 
+              }} />
+              <Button type="button" variant="outline" onClick={() => {
+                console.log('Cover upload button clicked');
+                coverInputRef.current?.click();
+              }}>PC'den yükle</Button>
+              
+              {/* Cover Preview */}
+              {coverUrl && (
+                <div className="mt-2">
+                  <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
+                  <img 
+                    key={`${coverUrl}-${forceUpdate}`} // Force re-render when URL changes
+                    src={`${coverUrl}?t=${Date.now()}`} // Cache busting
+                    alt="Cover önizleme" 
+                    className="w-full h-24 object-cover rounded-lg border border-slate-200"
+                    onError={(e) => {
+                      console.error('Cover preview failed to load:', coverUrl);
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

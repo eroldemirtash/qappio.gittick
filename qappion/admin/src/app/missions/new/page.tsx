@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { jpost, jget } from "@/lib/fetcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -52,9 +52,11 @@ export default function MissionNewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
   const [customBrands, setCustomBrands] = useState<Brand[]>([]);
   
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<FormVals>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch, trigger } = useForm<FormVals>({
     resolver: zodResolver(Schema),
     defaultValues: {
       reward_qp: 0,
@@ -63,10 +65,40 @@ export default function MissionNewPage() {
     }
   });
 
+  const coverUrl = watch("cover_url");
   const isQappioOfWeek = watch("is_qappio_of_week");
   const isSponsored = watch("is_sponsored");
-  const coverUrl = watch("cover_url");
   const startsAt = watch("starts_at");
+
+  // Debug coverUrl
+  console.log('coverUrl value:', coverUrl);
+
+  const handleCoverUpload = async (file: File) => {
+    console.log('handleCoverUpload called with file:', file);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("missionId", "temp-mission");
+      form.append("type", "cover");
+      
+      console.log('Uploading to /api/storage/mission-assets');
+      const res = await fetch("/api/storage/mission-assets", { method: "POST", body: form });
+      const json = await res.json();
+      
+      console.log('Upload response:', { res, json });
+      if (!res.ok) throw new Error(json?.error || "Upload failed");
+      
+      const cacheBustedUrl = `${json.url}?t=${Date.now()}`;
+      console.log('Setting cover_url to:', cacheBustedUrl);
+      setValue("cover_url", cacheBustedUrl, { shouldValidate: true });
+      await trigger();
+      setForceUpdate(prev => prev + 1);
+      toast.success("Kapak görseli yüklendi");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      toast.error(e?.message || "Yükleme başarısız");
+    }
+  };
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -251,21 +283,50 @@ export default function MissionNewPage() {
         {/* Kapak Görseli */}
         <div>
           <label className="block text-sm font-medium mb-2">Kapak Görseli URL</label>
-          <Input
-            {...register("cover_url")}
-            placeholder="https://example.com/cover.jpg"
+          <div className="flex gap-2">
+            <Input
+              {...register("cover_url")}
+              placeholder="https://example.com/cover.jpg"
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => coverInputRef.current?.click()}
+            >
+              PC'den Yükle
+            </Button>
+          </div>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              console.log('Cover file input changed:', e.target.files);
+              const file = e.target.files?.[0];
+              if (file) {
+                console.log('File selected for upload:', file);
+                handleCoverUpload(file);
+              } else {
+                console.log('No file selected');
+              }
+            }}
           />
           {coverUrl && (
             <div className="mt-3">
               <p className="text-sm text-slate-600 mb-2">Önizleme:</p>
+              <p className="text-xs text-slate-400 mb-2">URL: {coverUrl}</p>
               <div className="w-full h-48 bg-slate-100 rounded-xl overflow-hidden">
                 <img
-                  src={coverUrl}
+                  key={`${coverUrl}-${forceUpdate}`}
+                  src={`${coverUrl}?t=${Date.now()}`}
                   alt="Kapak görseli önizleme"
                   className="w-full h-full object-cover"
                   onError={(e) => {
+                    console.error('Cover preview failed to load:', coverUrl);
                     e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextElementSibling!.style.display = 'flex';
+                    (e.currentTarget.nextElementSibling as HTMLElement)!.style.display = 'flex';
                   }}
                 />
                 <div className="w-full h-full flex items-center justify-center text-slate-500" style={{display: 'none'}}>

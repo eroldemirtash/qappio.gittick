@@ -12,6 +12,19 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
 const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
   ({ className, src, alt, fallback, size = "md", ...props }, ref) => {
     const [imgError, setImgError] = React.useState(false);
+    const normalizedSrc = React.useMemo(() => {
+      if (!src) return undefined;
+      try {
+        // Trim spaces
+        const trimmed = src.trim();
+        if (trimmed.startsWith("//")) return `https:${trimmed}`;
+        if (trimmed.startsWith("http://")) return trimmed.replace(/^http:\/\//, "https://");
+        if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
+        return trimmed;
+      } catch {
+        return src;
+      }
+    }, [src]);
     
     const sizes = {
       sm: "h-8 w-8",
@@ -35,9 +48,9 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
         )}
         {...props}
       >
-        {src && !imgError ? (
+        {normalizedSrc && !imgError ? (
           <img
-            src={src}
+            src={normalizedSrc}
             alt={alt}
             className="aspect-square h-full w-full object-cover"
             onError={() => setImgError(true)}

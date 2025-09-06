@@ -37,10 +37,18 @@ export default function MissionsPage() {
     const fetchMissions = async () => {
       try {
         const response = await jget<{ items: any[] }>("/api/missions");
-        // Map reward_points to reward_qp for frontend compatibility
+        // Normalize fields for UI and extract brand info
         const mappedMissions = (response.items || []).map(mission => ({
           ...mission,
-          reward_qp: mission.reward_points || mission.reward_qp || 0
+          reward_qp: mission.qp_reward ?? mission.reward_qp ?? mission.reward_points ?? 0,
+          published: mission.is_published ?? mission.published ?? false,
+          brand: mission.brands ? {
+            id: mission.brands.id,
+            name: mission.brands.name,
+            logo_url: mission.brands.brand_profiles?.logo_url,
+            display_name: mission.brands.brand_profiles?.display_name,
+            category: mission.brands.brand_profiles?.category
+          } : null
         }));
         setMissions(mappedMissions);
       } catch (err) {

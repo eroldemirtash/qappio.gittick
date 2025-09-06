@@ -8,7 +8,8 @@ export async function jget<T = any>(url: string): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status} ${response.statusText} | ${body.slice(0,400)}`);
   }
 
   return response.json();
@@ -26,7 +27,8 @@ export async function jpost<T = any>(url: string, data: any): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status} ${response.statusText} | ${body.slice(0,400)}`);
   }
 
   return response.json();
@@ -44,7 +46,8 @@ export async function jpatch<T = any>(url: string, data: any): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status} ${response.statusText} | ${body.slice(0,400)}`);
   }
 
   return response.json();
@@ -61,7 +64,8 @@ export async function jdelete<T = any>(url: string): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status} ${response.statusText} | ${body.slice(0,400)}`);
   }
 
   return response.json();

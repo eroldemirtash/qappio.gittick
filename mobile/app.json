@@ -2,12 +2,20 @@
   "expo": {
     "name": "Qappio",
     "slug": "qappio",
+    "scheme": "qappio",
+    "platforms": ["ios", "android", "web"],
+    "sdkVersion": "53.0.0",
     "plugins": ["expo-router"],
     "experiments": { "typedRoutes": true },
-    "scheme": "qappio",
+    "android": {
+      "package": "com.qappio.mobile"
+    },
+    "ios": {
+      "bundleIdentifier": "com.qappio.mobile"
+    },
     "extra": {
-      "SUPABASE_URL": "https://<PROJECT>.supabase.co",
-      "SUPABASE_ANON_KEY": "<ANON_KEY>"
+      "SUPABASE_URL": "https://euscyxsglpwadhzvjazn.supabase.co",
+      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1c2N5eHNnbHB3YWRoenZqYXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3MzI0NzIsImV4cCI6MjA3MjMwODQ3Mn0.68jlbc-9Ld9ctfuecOP7yAfdz7w_-AGy6FmbVM_0prk"
     }
   }
 }

@@ -55,6 +55,15 @@ export function MissionCard({
 
   const timeRemaining = formatTimeRemaining(mission.ends_at);
 
+  // Debug: API'den gelen veriyi kontrol et
+  console.log('MissionCard - mission data:', {
+    id: mission.id,
+    title: mission.title,
+    brand: mission.brand,
+    is_sponsored: mission.is_sponsored,
+    sponsor_brand: mission.sponsor_brand
+  });
+
   return (
     <div className="card p-6 hover:shadow-lg transition-shadow">
       {/* Cover Image */}
@@ -73,6 +82,21 @@ export function MissionCard({
               </div>
             </div>
           )}
+          {mission.is_sponsored && mission.sponsor_brand && (
+            <div className="absolute top-3 left-3">
+              <div className="flex items-center gap-1 bg-purple-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                <span>Sponsored by</span>
+                {mission.sponsor_brand.brand_profiles?.logo_url && (
+                  <img
+                    src={mission.sponsor_brand.brand_profiles.logo_url}
+                    alt={mission.sponsor_brand.name}
+                    className="h-3 w-3 rounded-full"
+                  />
+                )}
+                <span>{mission.sponsor_brand.name}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -80,13 +104,27 @@ export function MissionCard({
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <Avatar
-            src={mission.brand?.brand_profiles?.avatar_url}
+            src={mission.brand?.brand_profiles?.logo_url}
             fallback={mission.brand?.name?.[0] || "M"}
             size="md"
           />
           <div>
             <h3 className="font-semibold text-slate-900 line-clamp-1">{mission.title}</h3>
             <p className="text-sm text-slate-500">{mission.brand?.name}</p>
+            {/* Sponsor bilgisi */}
+            {mission.is_sponsored && mission.sponsor_brand && (
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-xs text-red-500 font-medium">Sponsored by</span>
+                {mission.sponsor_brand.brand_profiles?.logo_url && (
+                  <img
+                    src={mission.sponsor_brand.brand_profiles.logo_url}
+                    alt={mission.sponsor_brand.name}
+                    className="h-3 w-3 rounded-full"
+                  />
+                )}
+                <span className="text-xs text-red-500 font-medium">{mission.sponsor_brand.name}</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -102,6 +140,7 @@ export function MissionCard({
           {mission.description}
         </p>
       )}
+
 
       {/* Time Remaining */}
       {timeRemaining && (
@@ -136,6 +175,20 @@ export function MissionCard({
           </Button>
         </div>
         
+        {/* Qappio of Week Toggle */}
+        <div className="flex justify-center mb-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggleQappioOfWeek(mission)}
+            disabled={isLoading}
+            className={`w-full ${mission.is_qappio_of_week ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}
+          >
+            <Star className="h-4 w-4 mr-2" />
+            {mission.is_qappio_of_week ? "Haftanın Qappio'su" : "Haftanın Qappio'su Yap"}
+          </Button>
+        </div>
+
         {/* Action Buttons */}
         <div className="grid grid-cols-3 gap-2">
           <Button 

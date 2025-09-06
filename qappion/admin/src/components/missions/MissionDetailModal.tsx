@@ -147,6 +147,20 @@ export function MissionDetailModal({
                 <div>
                   <p className="font-medium text-slate-900">{mission.brand?.name}</p>
                   <p className="text-sm text-slate-500">Marka</p>
+                  {/* Sponsor bilgisi */}
+                  {mission.is_sponsored && mission.sponsor_brand && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-xs text-red-500 font-medium">Sponsored by</span>
+                      {mission.sponsor_brand.brand_profiles?.logo_url && (
+                        <img
+                          src={mission.sponsor_brand.brand_profiles.logo_url}
+                          alt={mission.sponsor_brand.name}
+                          className="h-3 w-3 rounded-full"
+                        />
+                      )}
+                      <span className="text-xs text-red-500 font-medium">{mission.sponsor_brand.name}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

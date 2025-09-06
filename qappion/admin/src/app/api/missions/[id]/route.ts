@@ -22,22 +22,21 @@ export async function PATCH(
 
     const s = sbAdmin();
     const body = await request.json();
-    const { published, is_qappio_of_week, title, description, reward_qp, starts_at, ends_at } = body;
+    const { published, is_qappio_of_week, title, description, reward_qp, starts_at, ends_at, is_sponsored, sponsor_brand_id } = body;
     const { id } = await params;
 
     const updateData: any = {};
-    if (published !== undefined) updateData.published = published;
+    if (published !== undefined) updateData.is_published = published;
     if (is_qappio_of_week !== undefined) updateData.is_qappio_of_week = is_qappio_of_week;
     if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (reward_qp !== undefined) updateData.reward_qp = reward_qp;
+    if (description !== undefined) updateData.short_description = description;
+    if (reward_qp !== undefined) updateData.qp_reward = reward_qp;
     if (starts_at !== undefined) updateData.starts_at = starts_at;
     if (ends_at !== undefined) updateData.ends_at = ends_at;
     if (body.cover_url !== undefined) updateData.cover_url = body.cover_url;
     if (body.is_active !== undefined) updateData.is_active = body.is_active;
-    
-    // Panel'den gelen görev işareti korunur
-    updateData.is_from_panel = true;
+    if (is_sponsored !== undefined) updateData.is_sponsored = is_sponsored;
+    if (sponsor_brand_id !== undefined) updateData.sponsor_brand_id = sponsor_brand_id;
 
     const { data, error } = await s
       .from("missions")
@@ -243,7 +242,18 @@ export async function GET(
           id,
           name,
           brand_profiles (
-            avatar_url
+            avatar_url,
+            logo_url,
+            display_name
+          )
+        ),
+        sponsor_brand:brands!missions_sponsor_brand_id_fkey (
+          id,
+          name,
+          brand_profiles (
+            avatar_url,
+            logo_url,
+            display_name
           )
         )
       `)

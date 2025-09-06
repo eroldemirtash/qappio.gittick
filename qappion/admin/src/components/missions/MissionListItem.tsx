@@ -136,6 +136,16 @@ export function MissionListItem({
           )}
         </Button>
         
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggleQappioOfWeek(mission)}
+          disabled={isLoading}
+          className={mission.is_qappio_of_week ? "text-yellow-600 hover:text-yellow-700" : "text-slate-500 hover:text-slate-700"}
+        >
+          <Star className="h-4 w-4" />
+        </Button>
+        
         <Button 
           variant="ghost" 
           size="sm"

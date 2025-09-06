@@ -3,56 +3,66 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{
+    <Tabs screenOptions={{ 
       headerShown: false,
-      tabBarActiveTintColor: '#00bcd4',
-      tabBarInactiveTintColor: '#94a3b8',
-      tabBarStyle: { backgroundColor: '#091021', borderTopColor: '#1f2937' },
+      tabBarStyle: {
+        height: 80,
+        paddingBottom: 10,
+        paddingTop: 10,
+      },
+      tabBarLabelStyle: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 4,
+      },
+      tabBarIconStyle: {
+        marginTop: 4,
+      }
     }}>
+      {/* 1. Akış */}
       <Tabs.Screen 
         name="index" 
         options={{ 
-          title: 'Akış', 
-          tabBarIcon: ({color, size}) => (
-            <Ionicons name="home-outline" color={color} size={size}/>
-          )
-        }}
+          title: 'Qappio', 
+          tabBarLabel: 'Akış',
+          tabBarIcon: ({ color, size }) => <Ionicons name="list-outline" color={color} size={28} />
+        }} 
       />
+      {/* 2. Market */}
       <Tabs.Screen 
-        name="market" 
+        name="market/index" 
         options={{ 
-          title: 'Market', 
-          tabBarIcon: ({color, size}) => (
-            <Ionicons name="bag-outline" color={color} size={size}/>
-          )
-        }}
+          title: 'Market',
+          tabBarLabel: 'Market',
+          tabBarIcon: ({ color, size }) => <Ionicons name="bag-outline" color={color} size={28} />
+        }} 
       />
+      {/* 3. Qappiolar */}
       <Tabs.Screen 
-        name="qappiolar" 
+        name="qappios/index" 
         options={{ 
-          title: 'Qappiolar', 
-          tabBarIcon: ({color, size}) => (
-            <Ionicons name="sparkles-outline" color={color} size={size}/>
-          )
-        }}
+          title: 'Qappiolar',
+          tabBarLabel: 'Qappiolar',
+          tabBarIcon: ({ color, size }) => <Ionicons name="star-outline" color={color} size={28} />
+        }} 
       />
+      {/* 4. Cüzdan */}
       <Tabs.Screen 
         name="wallet" 
         options={{ 
-          title: 'Cüzdan', 
-          tabBarIcon: ({color, size}) => (
-            <Ionicons name="wallet" color={color} size={size}/>
-          )
-        }}
+          title: 'Cüzdan',
+          tabBarLabel: 'Cüzdan',
+          tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" color={color} size={28} />
+        }} 
       />
+      {/* 5. Profil */}
       <Tabs.Screen 
         name="profile" 
         options={{ 
-          title: 'Profil', 
-          tabBarIcon: ({color, size}) => (
-            <Ionicons name="person-outline" color={color} size={size}/>
-          )
-        }}
+          title: 'Profil',
+          tabBarLabel: 'Profil',
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={28} />
+        }} 
       />
     </Tabs>
   );

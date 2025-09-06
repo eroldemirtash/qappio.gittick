@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   try {
     const fileExt = file.name.split('.').pop();
     const fileName = `${brandId}/${type}.${fileExt}`;
-    const filePath = `brand-assets/${fileName}`;
+    const filePath = fileName; // Remove duplicate brand-assets prefix
 
     const { error: uploadError } = await s.storage
       .from("brand-assets")

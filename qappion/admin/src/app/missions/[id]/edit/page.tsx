@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { jget, jpatch } from "@/lib/fetcher";
 import { Mission } from "@/lib/types";
@@ -25,6 +25,7 @@ export default function EditMissionPage() {
   const [error, setError] = useState<string | null>(null);
   const [brands, setBrands] = useState<any[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -33,11 +34,15 @@ export default function EditMissionPage() {
         const missionsResponse = await jget<{ items: any[] }>("/api/missions");
         const foundMission = missionsResponse.items.find(m => m.id === missionId);
         if (foundMission) {
-          // Map reward_points to reward_qp
+          // Normalize fields for form
           const mappedMission = {
             ...foundMission,
-            reward_qp: foundMission.reward_points || foundMission.reward_qp || 0
-          };
+            reward_qp: (foundMission.qp_reward ?? foundMission.reward_qp ?? foundMission.reward_points ?? 0),
+            description: foundMission.short_description ?? foundMission.description ?? "",
+            published: foundMission.is_published ?? foundMission.published ?? false,
+            starts_at: foundMission.starts_at ?? null,
+            ends_at: foundMission.ends_at ?? null,
+          } as any;
           setMission(mappedMission);
         } else {
           setError("Görev bulunamadı");
@@ -59,6 +64,26 @@ export default function EditMissionPage() {
     }
   }, [missionId]);
 
+  const handleCoverUpload = async (file: File) => {
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("missionId", missionId);
+      form.append("type", "cover");
+      
+      const res = await fetch("/api/storage/mission-assets", { method: "POST", body: form });
+      const json = await res.json();
+      
+      if (!res.ok) throw new Error(json?.error || "Upload failed");
+      
+      setMission({ ...mission!, cover_url: json.url });
+      toast.success("Kapak görseli yüklendi");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      toast.error(e?.message || "Yükleme başarısız");
+    }
+  };
+
   const handleSave = async () => {
     if (!mission) return;
     
@@ -70,6 +95,8 @@ export default function EditMissionPage() {
         reward_qp: mission.reward_qp,
         published: mission.published,
         is_qappio_of_week: mission.is_qappio_of_week,
+        is_sponsored: mission.is_sponsored,
+        sponsor_brand_id: mission.sponsor_brand_id,
         starts_at: mission.starts_at,
         ends_at: mission.ends_at,
         cover_url: mission.cover_url,
@@ -176,6 +203,21 @@ export default function EditMissionPage() {
                   placeholder="Marka seçin..."
                   allowCustom={false}
                 />
+                {/* Brand logo preview and quick link to edit brand */}
+                {mission.brand_id && (
+                  <div className="mt-3 flex items-center gap-3">
+                    {brands.find(b => b.id === mission.brand_id)?.brand_profiles?.avatar_url ? (
+                      <img
+                        src={brands.find(b => b.id === mission.brand_id)?.brand_profiles?.avatar_url}
+                        alt="Marka logosu"
+                        className="w-10 h-10 rounded-full border"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full border bg-slate-100 grid place-items-center text-slate-400 text-xs">Logo</div>
+                    )}
+                    <Button variant="outline" onClick={() => router.push('/brands')}>Marka profilini düzenle</Button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -227,6 +269,42 @@ export default function EditMissionPage() {
                   Mobil uygulamada açıklama 2 satır olarak görünecek, fazlası "devamı..." ile gösterilecek
                 </p>
               </div>
+
+              {/* Sponsor Marka Seçimi */}
+              {mission.is_sponsored && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Sponsor Marka
+                  </label>
+                  <Combobox
+                    options={brands.map(brand => ({
+                      value: brand.id,
+                      label: brand.name,
+                      avatar: brand.brand_profiles?.logo_url
+                    }))}
+                    value={mission.sponsor_brand_id || ""}
+                    onChange={(value) => setMission({ ...mission, sponsor_brand_id: value })}
+                    placeholder="Sponsor marka seçin..."
+                    allowCustom={false}
+                  />
+                  {mission.sponsor_brand_id && (
+                    <div className="mt-3 flex items-center gap-3">
+                      {brands.find(b => b.id === mission.sponsor_brand_id)?.brand_profiles?.logo_url ? (
+                        <img
+                          src={brands.find(b => b.id === mission.sponsor_brand_id)?.brand_profiles?.logo_url}
+                          alt="Sponsor marka logosu"
+                          className="w-8 h-8 rounded-full border"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full border bg-slate-100 grid place-items-center text-slate-400 text-xs">S</div>
+                      )}
+                      <span className="text-sm text-slate-600">
+                        {brands.find(b => b.id === mission.sponsor_brand_id)?.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -238,10 +316,30 @@ export default function EditMissionPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Kapak Görseli URL
                 </label>
-                <Input
-                  value={mission.cover_url || ""}
-                  onChange={(e) => setMission({ ...mission, cover_url: e.target.value })}
-                  placeholder="https://example.com/cover.jpg"
+                <div className="flex gap-2">
+                  <Input
+                    value={mission.cover_url || ""}
+                    onChange={(e) => setMission({ ...mission, cover_url: e.target.value })}
+                    placeholder="https://example.com/cover.jpg"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => coverInputRef.current?.click()}
+                  >
+                    PC'den Yükle
+                  </Button>
+                </div>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCoverUpload(file);
+                  }}
                 />
               </div>
               
@@ -254,8 +352,8 @@ export default function EditMissionPage() {
                       alt="Kapak görseli önizleme"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling!.style.display = 'flex';
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                        ((e.currentTarget as HTMLElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
                       }}
                     />
                     <div className="w-full h-full flex items-center justify-center text-slate-500" style={{display: 'none'}}>
@@ -324,6 +422,17 @@ export default function EditMissionPage() {
                 <Switch
                   checked={mission.is_qappio_of_week}
                   onCheckedChange={(checked) => setMission({ ...mission, is_qappio_of_week: checked })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Sponsorlu</p>
+                  <p className="text-xs text-slate-500">Sponsorlu görev olarak işaretle</p>
+                </div>
+                <Switch
+                  checked={mission.is_sponsored || false}
+                  onCheckedChange={(checked) => setMission({ ...mission, is_sponsored: checked })}
                 />
               </div>
             </div>

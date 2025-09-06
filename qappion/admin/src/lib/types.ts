@@ -12,6 +12,7 @@ export interface Brand {
     id?: string;
     display_name?: string;
     avatar_url?: string;
+    logo_url?: string;
     cover_url?: string;
     description?: string;
     website?: string;
@@ -36,12 +37,25 @@ export interface Mission {
   reward_qp: number;
   published: boolean;
   is_qappio_of_week: boolean;
+  is_sponsored?: boolean;
+  sponsor_brand_id?: string;
   starts_at?: string;
   ends_at?: string;
   created_at: string;
+  updated_at?: string;
+  category?: string;
   brand?: {
     id: string;
     name: string;
+    logo_url?: string;
+    brand_profiles?: {
+      avatar_url?: string;
+    };
+  };
+  sponsor_brand?: {
+    id: string;
+    name: string;
+    logo_url?: string;
     brand_profiles?: {
       avatar_url?: string;
     };

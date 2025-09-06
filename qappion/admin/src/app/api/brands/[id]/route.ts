@@ -15,14 +15,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .select(`
         id,
         name,
-        description,
-        website,
-        email,
-        phone,
-        category,
         is_active,
         created_at,
         brand_profiles (
+          logo_url,
           avatar_url,
           display_name,
           category,
@@ -44,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         )
       `)
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("BRAND_GET_ERROR:", error.message);

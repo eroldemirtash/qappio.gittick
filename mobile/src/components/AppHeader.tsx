@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,32 +11,17 @@ export default function AppHeader(props: any) {
   const title = props?.options?.headerTitle ?? 'Qappio';
 
   return (
-    <View style={{ paddingTop: insets.top }} className="bg-[#091021] border-b border-border">
-      <View className="h-[52px] flex-row items-center px-2">
-        <Pressable 
-          onPress={() => (canGoBack ? router.back() : null)} 
-          className="p-2 rounded-lg"
-        >
-          <Ionicons 
-            name="chevron-back" 
-            size={22} 
-            color={canGoBack ? '#e5e7eb' : '#94a3b8'} 
-          />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <Pressable onPress={() => (canGoBack ? router.back() : null)} style={styles.button}>
+          <Ionicons name="chevron-back" size={22} color={canGoBack ? '#e5e7eb' : '#94a3b8'} />
         </Pressable>
-        <Text numberOfLines={1} className="flex-1 text-center text-text font-bold text-base">
-          {title}
-        </Text>
-        <View className="flex-row items-center">
-          <Pressable 
-            onPress={() => router.push('/messages')} 
-            className="p-2 rounded-lg"
-          >
+        <Text numberOfLines={1} style={styles.title}>{title}</Text>
+        <View style={styles.rightButtons}>
+          <Pressable onPress={() => router.push('/messages')} style={styles.button}>
             <Ionicons name="paper-plane-outline" size={20} color="#e5e7eb" />
           </Pressable>
-          <Pressable 
-            onPress={() => router.push('/notifications')} 
-            className="p-2 rounded-lg"
-          >
+          <Pressable onPress={() => router.push('/notifications')} style={styles.button}>
             <Ionicons name="notifications-outline" size={20} color="#e5e7eb" />
           </Pressable>
         </View>
@@ -44,3 +29,32 @@ export default function AppHeader(props: any) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#091021',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1f2937',
+  },
+  header: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  button: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  title: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#e5e7eb',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  rightButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+});

@@ -35,14 +35,23 @@ export default function BrandsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await jget<{ items: Brand[] }>("/api/brands");
+      const response = await jget<{ items: any[] }>("/api/brands");
       console.log("Brands API Response:", response);
       console.log("Brands items:", response.items);
       if (response.items && response.items.length > 0) {
         console.log("First brand:", response.items[0]);
         console.log("First brand profiles:", response.items[0].brand_profiles);
       }
-      setBrands(response.items || []);
+      // Normalize brand_profiles and logo (snake/camel)
+      const normalized: Brand[] = (response.items || []).map((b: any) => {
+        const profile = Array.isArray(b.brand_profiles) ? b.brand_profiles[0] : b.brand_profiles;
+        return {
+          ...b,
+          logo_url: b.logo_url || b.logoUrl || profile?.logo_url || profile?.avatar_url || null,
+          brand_profiles: profile
+        };
+      });
+      setBrands(normalized);
     } catch (err) {
       console.error("Brands fetch error:", err);
       setError(err instanceof Error ? err.message : "Bilinmeyen hata");
@@ -254,7 +263,7 @@ export default function BrandsPage() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <Avatar
-                          src={brand.brand_profiles?.avatar_url}
+                          src={brand.brand_profiles?.logo_url || brand.brand_profiles?.avatar_url}
                           fallback={brand.name[0] || "M"}
                           size="lg"
                         />
@@ -385,7 +394,7 @@ export default function BrandsPage() {
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
                               <Avatar
-                                src={brand.brand_profiles?.avatar_url}
+                                src={brand.brand_profiles?.logo_url || brand.brand_profiles?.avatar_url}
                                 fallback={brand.name[0] || "M"}
                                 size="sm"
                               />
