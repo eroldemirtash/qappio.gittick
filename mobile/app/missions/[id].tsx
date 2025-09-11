@@ -1,894 +1,799 @@
-import React, { useEffect, useLayoutEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, RefreshControl, Pressable, Modal, FlatList } from 'react-native';
-import { useLocalSearchParams, useNavigation, router } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, Dimensions, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { card3DStyles } from '@/src/theme/card3D';
 import { supabase } from '@/src/lib/supabase';
 import FeedCard from '@/src/features/missions/components/FeedCard';
+import { fonts } from '@/src/utils/fonts';
+import { getLevelColor } from '@/src/lib/levels';
 
-type Mission = {
-  id: string;
-  title: string;
-  description: string | null;
-  short_description?: string | null;
-  cover_url: string | null;
-  brand_name: string | null;
-  brand_logo: string | null;
-  qp_reward: number | null;
-  starts_at: string | null;
-  ends_at: string | null;
-  total_posts: number;
-  total_likes: number;
-  is_sponsored?: boolean;
-  sponsor_brand_name?: string | null;
-  sponsor_brand_logo?: string | null;
-  sponsor_brand?: {
-    id: string;
-    name: string;
-    logo_url: string;
-  };
-};
-
-type RankUser = {
-  id: string;
-  name: string;
-  avatar: string;
-  likes: number;
-  rank: number;
-  level: 'Snapper' | 'Seeker' | 'Crafter' | 'Viralist' | 'Qappian' | 'bronze' | 'silver' | 'gold' | string;
-};
-
-type FeedPost = {
-  id: string;
-  media_type: 'image' | 'video';
-  media_url: string;
-  caption: string;
-  like_count: number;
-  comment_count: number;
-  created_at: string;
-  is_sponsored: boolean;
-  is_liked?: boolean;
-  sponsor_brand?: {
-    id: string;
-    name: string;
-    logo_url: string;
-  } | null;
-  user: {
-    id: string;
-    display_name: string;
-    avatar_url: string;
-    level_name: string;
-    level_tier: number;
-  };
-  mission: {
-    id: string;
-    title: string;
-    brand: {
-      id: string;
-      name: string;
-      logo_url: string;
-    };
-  };
-  latest_comment: {
-    username: string;
-    text: string;
-  };
-};
-
-function formatTimeLeft(startsAt?: string | null, endsAt?: string | null) {
-  try {
-    const now = new Date();
-    const start = startsAt ? new Date(startsAt) : null;
-    const end = endsAt ? new Date(endsAt) : null;
-    if (start && now < start) return 'Yakında';
-    if (!end) return '';
-    if (now >= end) return 'Sona erdi';
-    const diffMs = end.getTime() - now.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    const days = Math.floor(diffMin / (60 * 24));
-    const hours = Math.floor((diffMin % (60 * 24)) / 60);
-    const mins = diffMin % 60;
-    if (days > 0) return `${days}g ${hours}s ${mins}dk`;
-    if (hours > 0) return `${hours}s ${mins}dk`;
-    return `${mins}dk`;
-  } catch {
-    return '';
-  }
-}
-
-function levelColor(level: RankUser['level']) {
-  switch (level) {
-    case 'Snapper': return '#fbbf24'; // Yellow
-    case 'Seeker': return '#10b981'; // Green
-    case 'Crafter': return '#8b5cf6'; // Purple
-    case 'Viralist': return '#f59e0b'; // Orange
-    case 'Qappian': return '#06b6d4'; // Cyan
-    case 'gold': return '#ffd700';
-    case 'silver': return '#c0c0c0';
-    case 'bronze': return '#cd7f32';
-    default: return '#6b7280'; // Default gray
-  }
-}
+const { width } = Dimensions.get('window');
+const AVATAR_GAP = 6;
 
 export default function MissionDetailScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
-  const navigation = useNavigation();
-
-  const [mission, setMission] = useState<Mission | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [netErr, setNetErr] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const [topUsers, setTopUsers] = useState<RankUser[]>([]);
-  const [rankLoading, setRankLoading] = useState(true);
-  
-  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
-  const [showFullDescription, setShowFullDescription] = useState(false);
-  
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
-  const [feedLoading, setFeedLoading] = useState(true);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: 'Qappio', headerTitleAlign: 'center' });
-  }, [navigation]);
-
-  const fetchMission = useCallback(async () => {
-    if (!id || typeof id !== 'string') {
-      setMission(null);
-      setLoading(false);
-      setNetErr('Geçersiz görev kimliği');
-      return;
-    }
-    setLoading(true);
-    setNetErr(null);
-    try {
-      const { data, error } = await supabase
-        .from('v_missions_public')
-        .select('id,title,short_description,cover_url,brand_name,brand_logo,qp_reward,starts_at,ends_at,is_sponsored,sponsor_brand_name,sponsor_brand_logo')
-        .eq('id', id as string)
-        .maybeSingle(); // ✅ single -> maybeSingle
-
-      if (error) {
-        console.error('❌ Mission fetch error:', error);
-        setNetErr(error.message ?? 'Bilinmeyen hata');
-        setMission(null);
-      } else {
-        // Mock data for total_posts and total_likes (gerçek veriler için ayrı sorgu gerekir)
-        const missionData = data ? {
-          ...data,
-          description: data.short_description || 'Görev açıklaması bulunamadı',
-          total_posts: Math.floor(Math.random() * 100) + 10, // Mock: 10-110 arası
-          total_likes: Math.floor(Math.random() * 500) + 50, // Mock: 50-550 arası
-          // Sponsor bilgilerini ekle
-          sponsor_brand: data.is_sponsored && data.sponsor_brand_name ? {
-            id: 'sponsor-' + data.id,
-            name: data.sponsor_brand_name,
-            logo_url: data.sponsor_brand_logo || 'https://via.placeholder.com/48'
-          } : undefined
-        } : null;
-        setMission(missionData);
-      }
-    } catch (e: any) {
-      console.error('❌ Mission fetch exception:', e);
-      setNetErr(String(e?.message ?? e));
-      setMission(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  const fetchFeedPosts = useCallback(async () => {
-    if (!id || typeof id !== 'string') {
-      setFeedLoading(false);
-      return;
-    }
-
-    try {
-      // Mock data for now - later we'll fetch from submissions table
-      const mockPosts: FeedPost[] = [
-        {
-          id: 'post-1',
-          media_type: 'image',
-          media_url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80&fit=crop',
-          caption: 'Qappio geliyor görevini tamamladım! Harika bir deneyimdi 🚀',
-          like_count: 24,
-          comment_count: 8,
-          created_at: new Date().toISOString(),
-          is_sponsored: false,
-          sponsor_brand: null,
-          user: {
-            id: 'user-1',
-            display_name: 'Ahmet Yılmaz',
-            avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-            level_name: 'Snapper',
-            level_tier: 1
-          },
-          mission: {
-            id: id as string,
-            title: 'Qappio geliyor',
-            brand: {
-              id: 'brand-1',
-              name: 'Qappio Team',
-              logo_url: 'https://via.placeholder.com/50'
-            }
-          },
-          latest_comment: {
-            username: 'Ayşe',
-            text: 'Çok güzel olmuş!'
-          }
-        },
-        {
-          id: 'post-2',
-          media_type: 'image',
-          media_url: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=80&fit=crop',
-          caption: 'iPhone 15 Pro ile çektim, mükemmel kalite! 📱',
-          like_count: 18,
-          comment_count: 5,
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-          is_sponsored: false,
-          sponsor_brand: null,
-          user: {
-            id: 'user-2',
-            display_name: 'Mehmet Kaya',
-            avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
-            level_name: 'Seeker',
-            level_tier: 2
-          },
-          mission: {
-            id: id as string,
-            title: 'Qappio geliyor',
-            brand: {
-              id: 'brand-1',
-              name: 'Qappio Team',
-              logo_url: 'https://via.placeholder.com/50'
-            }
-          },
-          latest_comment: {
-            username: 'Fatma',
-            text: 'Hangi kamera kullandın?'
-          }
-        },
-        {
-          id: 'post-3',
-          media_type: 'image',
-          media_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80&fit=crop',
-          caption: 'Nike Air Max ile koşu yaparken çektim! 🏃‍♂️',
-          like_count: 32,
-          comment_count: 12,
-          created_at: new Date(Date.now() - 7200000).toISOString(),
-          is_sponsored: false,
-          sponsor_brand: null,
-          user: {
-            id: 'user-3',
-            display_name: 'Zeynep Demir',
-            avatar_url: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
-            level_name: 'Crafter',
-            level_tier: 3
-          },
-          mission: {
-            id: id as string,
-            title: 'Qappio geliyor',
-            brand: {
-              id: 'brand-1',
-              name: 'Qappio Team',
-              logo_url: 'https://via.placeholder.com/50'
-            }
-          },
-          latest_comment: {
-            username: 'Ali',
-            text: 'Süper enerji!'
-          }
-        }
-      ];
-
-      setFeedPosts(mockPosts);
-    } catch (err: any) {
-      console.error('Feed posts fetch error:', err);
-    } finally {
-      setFeedLoading(false);
-    }
-  }, [id]);
-
-  const fallbackTopUsers: RankUser[] = [
+  const [posts, setPosts] = useState<any[]>([]);
+  const [topUsers, setTopUsers] = useState([
     { id: '1', name: 'user1', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face', likes: 245, rank: 1, level: 'gold' },
     { id: '2', name: 'user2', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face', likes: 198, rank: 2, level: 'silver' },
     { id: '3', name: 'user3', avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face', likes: 156, rank: 3, level: 'bronze' },
-    { id: '4', name: 'user4', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face', likes: 134, rank: 4, level: 'Snapper' },
-    { id: '5', name: 'user5', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face', likes: 98, rank: 5, level: 'Seeker' },
-  ];
+    { id: '4', name: 'user4', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face', likes: 134, rank: 4, level: 'bronze' },
+    { id: '5', name: 'user5', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face', likes: 98, rank: 5, level: 'bronze' },
+  ]);
 
-  const fetchRanking = useCallback(async () => {
-    if (!id || typeof id !== 'string') {
-      setTopUsers([]);
-      setRankLoading(false);
+  const fetchPosts = async () => {
+    // Mock data for posts - FeedCard format
+    setPosts([
+      {
+        id: '1',
+        media_type: 'image',
+        media_url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80&fit=crop',
+        caption: 'Yeni koleksiyonumuzu keşfedin! 🎉 #fashion #style',
+        like_count: 245,
+        comment_count: 12,
+        created_at: new Date().toISOString(),
+        is_sponsored: false,
+        sponsor_brand: null,
+        user: {
+          id: 'user-1',
+          display_name: 'kullanici1',
+          avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
+          level_name: 'Snapper',
+          level_tier: 1
+        },
+        mission: {
+          id: '1',
+          title: 'Instagram\'da Paylaş',
+          brand: {
+            id: 'brand-1',
+            name: 'Coca Cola',
+            logo_url: 'https://via.placeholder.com/50'
+          }
+        },
+        comments: []
+      },
+      {
+        id: '2',
+        media_type: 'image',
+        media_url: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800&q=80&fit=crop',
+        caption: 'Harika bir gün! ☀️ #summer #fun',
+        like_count: 198,
+        comment_count: 8,
+        created_at: new Date().toISOString(),
+        is_sponsored: false,
+        sponsor_brand: null,
+        user: {
+          id: 'user-2',
+          display_name: 'kullanici2',
+          avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
+          level_name: 'Seeker',
+          level_tier: 2
+        },
+        mission: {
+          id: '1',
+          title: 'Instagram\'da Paylaş',
+          brand: {
+            id: 'brand-1',
+            name: 'Coca Cola',
+            logo_url: 'https://via.placeholder.com/50'
+          }
+        },
+        comments: []
+      },
+      {
+        id: '3',
+        media_type: 'image',
+        media_url: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80&fit=crop',
+        caption: 'Mükemmel an! 📸 #photography #art',
+        like_count: 156,
+        comment_count: 23,
+        created_at: new Date().toISOString(),
+        is_sponsored: false,
+        sponsor_brand: null,
+        user: {
+          id: 'user-3',
+          display_name: 'kullanici3',
+          avatar_url: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
+          level_name: 'Crafter',
+          level_tier: 3
+        },
+        mission: {
+          id: '1',
+          title: 'Instagram\'da Paylaş',
+          brand: {
+            id: 'brand-1',
+            name: 'Coca Cola',
+            logo_url: 'https://via.placeholder.com/50'
+          }
+        },
+        comments: []
+      },
+    ]);
+  };
+
+  const fetchMission = async () => {
+    if (!id) {
+      console.log('❌ No mission ID provided');
       return;
     }
-    setRankLoading(true);
+    
+    console.log('🔍 Fetching mission with ID:', id);
+    
     try {
-      // Fallback: Mock data (leaderboard view yok)
-      setTopUsers(fallbackTopUsers);
-    } catch (e) {
-      console.warn('⚠️ Ranking fetch fallback:', e);
-      setTopUsers(fallbackTopUsers);
+      const { data: missionData, error: missionError } = await supabase
+        .from('missions')
+        .select(`
+          id,
+          title,
+          brief,
+          description,
+          cover_url,
+          reward_qp,
+          starts_at,
+          ends_at,
+          brand_id
+        `)
+        .eq('id', id)
+        .single();
+
+      if (missionError) {
+        console.error('❌ Mission fetch error:', missionError);
+        return;
+      }
+      
+      // Get brand data
+      let brandData = null;
+      if (missionData.brand_id) {
+        const { data: brand, error: brandError } = await supabase
+          .from('brands')
+          .select(`
+            id,
+            name,
+            logo_url
+          `)
+          .eq('id', missionData.brand_id)
+          .single();
+
+        if (!brandError) {
+          brandData = brand;
+          console.log('✅ Brand data fetched:', brandData);
+        } else {
+          console.error('❌ Brand fetch error:', brandError);
+        }
+      }
+
+      // Calculate time left
+      const now = new Date();
+      const endTime = missionData.ends_at ? new Date(missionData.ends_at) : null;
+      const timeLeft = endTime ? Math.max(0, endTime.getTime() - now.getTime()) : null;
+      
+      let timeLeftText = '';
+      if (timeLeft !== null) {
+        const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+        
+        if (days > 0) {
+          timeLeftText = `${days}g ${hours}s`;
+        } else if (hours > 0) {
+          timeLeftText = `${hours}s ${minutes}d`;
+        } else {
+          timeLeftText = `${minutes}dk`;
+        }
+      }
+
+      const mappedMission = {
+        id: missionData.id,
+        title: missionData.title,
+        brief: missionData.brief,
+        description: missionData.description,
+        coverUrl: missionData.cover_url,
+        qpValue: missionData.reward_qp,
+        timeLeft: timeLeftText,
+        brand: brandData ? {
+          id: brandData.id,
+          name: brandData.name,
+          logoUrl: brandData.logo_url,
+          coverUrl: null
+        } : null,
+        totalLikes: 245,
+        totalPosts: 12,
+      };
+      
+      console.log('🎯 Mapped mission:', mappedMission);
+      console.log('🎯 Brand info:', mappedMission.brand);
+      setMission(mappedMission);
+    } catch (err) {
+      console.error('❌ Mission fetch error:', err);
+      setMission(null);
     } finally {
-      setRankLoading(false);
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      await fetchMission();
+      await fetchPosts();
+    };
+    
+    loadData();
   }, [id]);
 
-  useEffect(() => {
-    fetchMission();
-    fetchRanking();
-    fetchFeedPosts();
-  }, [fetchMission, fetchRanking, fetchFeedPosts]);
-
-  // Realtime updates for mission stats
-  useEffect(() => {
-    if (!mission?.id) return;
-
-    const channel = supabase
-      .channel(`mission-${mission.id}`)
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'mission_submissions' },
-        () => {
-          // Refresh mission data when submissions change
-          fetchMission();
-        }
-      )
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'mission_likes' },
-        () => {
-          // Refresh mission data when likes change
-          fetchMission();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [mission?.id, fetchMission]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([fetchMission(), fetchRanking(), fetchFeedPosts()]);
-    setRefreshing(false);
+  const getRankColor = (rank: number) => {
+    switch (rank) {
+      case 1: return '#ffd700';
+      case 2: return '#c0c0c0';
+      case 3: return '#cd7f32';
+      default: return '#000';
+    }
   };
 
-  // Feed post handlers
-  const handleLike = (postId: string) => {
-    setFeedPosts(prevPosts =>
-      prevPosts.map(post => {
-        if (post.id === postId) {
-          const wasLiked = post.is_liked || false;
-          const newLikeCount = wasLiked 
-            ? (post.like_count || 0) - 1  // Beğeniyi geri al
-            : (post.like_count || 0) + 1; // Beğeni ekle
-          
-          return {
-            ...post,
-            like_count: Math.max(0, newLikeCount), // Negatif olmasın
-            is_liked: !wasLiked
-          };
-        }
-        return post;
-      })
-    );
-    console.log('Toggled like for post:', postId);
-  };
 
-  const handleComment = (postId: string, text: string) => {
-    setFeedPosts(prevPosts => 
-      prevPosts.map(post => 
-        post.id === postId 
-          ? { ...post, comment_count: (post.comment_count || 0) + 1 }
-          : post
-      )
-    );
-    console.log('Commented on post:', postId, 'Text:', text);
-  };
 
-  const handleShare = (postId: string) => {
-    console.log('Shared post:', postId);
-  };
-
-  // ---- UI STATES ----
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#00bcd4" />
-        <Text style={styles.dimText}>Yükleniyor…</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Yükleniyor...</Text>
       </View>
     );
   }
 
   if (!mission) {
     return (
-      <View style={styles.center}>
-        <Ionicons name="alert-circle" size={32} color="#ef4444" />
-        <Text style={[styles.dimText, { marginTop: 8 }]}>
-          Görev bulunamadı veya kaldırılmış olabilir.
-        </Text>
-        {netErr ? <Text style={[styles.dimText, { marginTop: 4 }]}>{netErr}</Text> : null}
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-          <Pressable style={styles.ghostBtn} onPress={() => router.back()}>
-            <Text style={styles.ghostBtnText}>Geri dön</Text>
-          </Pressable>
-          <Pressable style={styles.primaryBtn} onPress={fetchMission}>
-            <Text style={styles.primaryBtnText}>Yenile</Text>
-          </Pressable>
-        </View>
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Görev bulunamadı</Text>
       </View>
     );
   }
 
-  // ---- SUCCESS ----
-  const cover = mission.cover_url || 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80&fit=crop';
-  const brandLogo = mission.brand_logo || 'https://via.placeholder.com/48';
-  const timeLeft = formatTimeLeft(mission.starts_at, mission.ends_at);
-  const qp = mission.qp_reward ?? 0;
-  const description = mission.description || mission.short_description || 'Açıklama bulunamadı';
-  const isDescriptionLong = description.length > 150;
-
-  const goQappishle = () => router.push(`/submit/${mission.id}`); // ✅ foto çek/yükle akışı
-  const toggleDescriptionModal = () => setShowDescriptionModal(!showDescriptionModal);
-
-  const RankingStrip = () => (
-    <View style={styles.rankingSection}>
-      {/* Sticky Brand Logo */}
-      <View style={styles.stickyBrandLogo}>
-        <Image source={{ uri: brandLogo }} style={styles.stickyBrandImage} />
-      </View>
-      
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        style={styles.rankingScrollView}
-        contentContainerStyle={styles.rankingScrollContent}
-      >
-        {topUsers.map((u) => (
-          <View key={u.id} style={styles.rankingItem}>
-            <View style={styles.avatarContainer}>
-              <View style={[styles.avatarBorder, { borderColor: levelColor(u.level) }]}>
-                <Image source={{ uri: u.avatar }} style={styles.rankingAvatar} />
-              </View>
-              <View style={[styles.rankBadge, { backgroundColor: u.rank === 1 ? '#ffd700' : u.rank === 2 ? '#c0c0c0' : u.rank === 3 ? '#cd7f32' : '#0f172a' }]}>
-                <Text style={styles.rankText}>{u.rank}</Text>
-              </View>
-            </View>
-            <View style={styles.likesRow}>
-              <Ionicons name="heart" size={12} color="#ef4444" />
-              <Text style={styles.likesText}>{u.likes}</Text>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-
-
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ padding: 8, paddingTop: 12 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#00bcd4']} />}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Ranking satırı */}
-      {!rankLoading && topUsers.length > 0 ? <RankingStrip /> : null}
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
 
-      {/* Mission Card */}
-      <View style={styles.card}>
-        <Image source={{ uri: cover }} style={styles.image} />
-        <View style={styles.overlay} />
+             {/* Ranking Section */}
+             <View style={styles.rankingSection}>
+               <View style={styles.rankingContainer}>
+                 {/* Brand Logo - Fixed */}
+                 <View style={styles.brandLogoFixed}>
+                   <Pressable 
+                     style={styles.brandLogoContainer}
+                     onPress={() => {
+                       if (mission.brand?.id) {
+                         router.push(`/brands/${mission.brand.id}`);
+                       }
+                     }}
+                   >
+                     <Image 
+                       source={{ 
+                         uri: mission.brand?.logoUrl || 'https://via.placeholder.com/50x50/06b6d4/ffffff?text=' + encodeURIComponent(mission.brand?.name || 'M')
+                       }} 
+                       style={styles.brandLogoRanking}
+                     />
+                   </Pressable>
+                 </View>
+                 
+                 {/* Scrollable Users */}
+                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rankingScroll}>
+                   {/* Top Users */}
+                   {topUsers.map((user, index) => (
+                     <View key={user.id} style={styles.rankingItem}>
+                       <View style={styles.rankingAvatarContainer}>
+                         <Image source={{ uri: user.avatar }} style={styles.rankingAvatar} />
+                         <View style={[styles.rankBadge, { backgroundColor: getRankColor(user.rank) }]}>
+                           <Text style={styles.rankText}>{user.rank}</Text>
+                         </View>
+                       </View>
+                       <View style={styles.rankingStats}>
+                         <View style={styles.rankingStat}>
+                           <Ionicons name="heart" size={12} color="#ef4444" />
+                           <Text style={styles.rankingStatText}>{user.likes}</Text>
+                         </View>
+                       </View>
+                     </View>
+                   ))}
+                 </ScrollView>
+               </View>
+             </View>
 
-        {/* Brand - TL */}
-        <View style={styles.brandChip}>
-          <Image source={{ uri: brandLogo }} style={styles.brandLogo} />
-          <Text style={styles.brandName}>{mission.brand_name ?? 'Bilinmeyen Marka'}</Text>
-        </View>
-
-        {/* Sponsored By - Below Brand */}
-        {mission.is_sponsored && mission.sponsor_brand_name && (
-          <View style={styles.sponsoredBelowBrand}>
-            <View style={styles.sponsoredBelowBrandChip}>
-              <Text style={styles.sponsoredBelowBrandText}>Sponsored by</Text>
-              <Image 
-                source={{ uri: mission.sponsor_brand_logo || 'https://via.placeholder.com/30' }} 
-                style={styles.sponsoredBelowBrandLogo} 
-              />
-              <Text style={styles.sponsoredBelowBrandSponsorText}>{mission.sponsor_brand_name}</Text>
-            </View>
-          </View>
-        )}
-
-
-
-        {/* Time & QP - TR */}
-        <View style={styles.topRight}>
-          {!!timeLeft && (
-            <View style={styles.timePill}>
-              <Text style={styles.timeText}>{timeLeft}</Text>
-            </View>
-          )}
-          <View style={styles.qpWrap}>
-            <LinearGradient colors={['#ffd700', '#ffb347', '#ff8c00']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.qpGrad}>
-              <Text style={styles.qpText}>{qp} QP</Text>
-            </LinearGradient>
-          </View>
-        </View>
-
-        {/* Description - Center */}
-        <View style={styles.titleWrap}>
-          <Text 
-            style={styles.title} 
-            numberOfLines={3}
-            onPress={isDescriptionLong ? toggleDescriptionModal : undefined}
+        {/* Mission Detail Card - MissionCard Style */}
+        <Pressable 
+          style={[styles.missionCard, card3DStyles.card3D]}
+          onPress={() => setModalVisible(true)}
+        >
+          <Image 
+            source={{ uri: mission.coverUrl || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80' }} 
+            style={styles.missionImage}
+          />
+          <View style={styles.missionOverlay} />
+          
+          {/* Brand Logo and Name - Top Left */}
+          <Pressable 
+            style={styles.brandInfo}
+            onPress={() => {
+              if (mission.brand?.id) {
+                router.push(`/brands/${mission.brand.id}`);
+              }
+            }}
           >
-            {description}
-          </Text>
-          {isDescriptionLong && (
-            <Pressable onPress={toggleDescriptionModal} style={styles.readMoreBtn}>
-              <Text style={styles.readMoreText}>Devamı...</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {/* Bottom actions */}
-        <View style={styles.bottomRow}>
-          <View style={styles.statsBtn}>
-            <Ionicons name="camera-outline" size={16} color="#fff" />
-            <Text style={styles.statsText}>{feedPosts.length}</Text>
-          </View>
-          <Pressable style={styles.ctaBtn} onPress={goQappishle}>
-            <LinearGradient colors={['#00bcd4', '#0097a7', '#006064']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaGrad}>
-              <Ionicons name="camera" size={18} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.ctaText}>Qappishle!</Text>
-            </LinearGradient>
+            <Image 
+              source={{ 
+                uri: mission.brand?.logoUrl || 'https://via.placeholder.com/30x30/06b6d4/ffffff?text=' + encodeURIComponent(mission.brand?.name || 'M')
+              }} 
+              style={styles.brandLogo}
+            />
+            <Text style={styles.brandName}>{mission.brand?.name || 'Marka'}</Text>
           </Pressable>
-          <View style={styles.statsBtn}>
-            <Ionicons name="heart" size={16} color="#ef4444" />
-            <Text style={styles.statsText}>{feedPosts.reduce((total, post) => total + (post.like_count || 0), 0)}</Text>
+
+          {/* Countdown and QP - Top Right */}
+          <View style={styles.topRightContainer}>
+            <View style={styles.countdownContainer}>
+              <Ionicons name="hourglass-outline" size={12} color="#fff" style={styles.countdownIcon} />
+              <Text style={styles.countdownText}>{mission.timeLeft || 'Süresiz'}</Text>
+            </View>
+            <View style={styles.qpContainer}>
+              <LinearGradient
+                colors={['#ffd700', '#ffb347', '#ff8c00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.qpGradient}
+              >
+                <Text style={styles.qpText}>{mission.qpValue} QP</Text>
+              </LinearGradient>
+            </View>
           </View>
-        </View>
-      </View>
 
-      {/* Feed Posts Section */}
-      {feedPosts.length > 0 && (
-        <View style={styles.feedSection}>
-          {feedLoading ? (
-            <View style={styles.feedLoading}>
-              <ActivityIndicator size="small" color="#00bcd4" />
-              <Text style={styles.feedLoadingText}>Paylaşımlar yükleniyor...</Text>
-            </View>
-          ) : (
-            <View style={styles.feedList}>
-              {feedPosts.map((item) => (
-                <FeedCard
-                  key={item.id}
-                  post={item}
-                  onLike={handleLike}
-                  onComment={handleComment}
-                  onShare={handleShare}
-                />
-              ))}
-            </View>
-          )}
-        </View>
-      )}
 
-      {/* Description Modal */}
+          {/* Mission Description - Center */}
+          <View style={styles.missionDescriptionContainer}>
+            <Text style={styles.missionDescription} numberOfLines={2}>
+              {mission.description || 'Görev açıklaması buraya yazılacak...'}
+            </Text>
+            {mission.description && mission.description.length > 100 && (
+              <Text style={styles.readMoreText}>devamı...</Text>
+            )}
+          </View>
+
+               {/* Action Buttons and Qappishle Button - Bottom */}
+               <View style={styles.actionButtons}>
+                 {/* Post Count */}
+                 <View style={styles.statItem}>
+                   <LinearGradient
+                     colors={['#06b6d4', '#0ea5e9', '#0284c7']}
+                     start={{ x: 0, y: 0 }}
+                     end={{ x: 1, y: 1 }}
+                     style={styles.statGradient}
+                   >
+                     <Ionicons name="images" size={20} color="#fff" />
+                     <Text style={styles.statText}>{mission.totalPosts || 0}</Text>
+                   </LinearGradient>
+                 </View>
+                 
+                 <Pressable 
+                   style={styles.qappishleButtonCompact} 
+                   onPress={() => router.push(`/submit/${id}`)}
+                 >
+                   <LinearGradient
+                     colors={['#06b6d4', '#0ea5e9', '#0284c7']}
+                     start={{ x: 0, y: 0 }}
+                     end={{ x: 1, y: 1 }}
+                     style={styles.qappishleGradientCompact}
+                   >
+                     <View style={styles.cameraIconContainer}>
+                       <Ionicons name="camera-outline" size={36} color="#ffffff" />
+                     </View>
+                   </LinearGradient>
+                 </Pressable>
+                 
+                 {/* Like Count */}
+                 <View style={styles.statItem}>
+                   <LinearGradient
+                     colors={['#06b6d4', '#0ea5e9', '#0284c7']}
+                     start={{ x: 0, y: 0 }}
+                     end={{ x: 1, y: 1 }}
+                     style={styles.statGradient}
+                   >
+                     <Ionicons name="heart" size={20} color="#fff" />
+                     <Text style={styles.statText}>{mission.totalLikes || 0}</Text>
+                   </LinearGradient>
+                 </View>
+               </View>
+        </Pressable>
+
+        {/* Posts Section */}
+        <View style={styles.postsSection}>
+          {posts.map((post) => (
+            <FeedCard 
+              key={post.id} 
+              post={post}
+              onLike={(postId) => console.log('Like post:', postId)}
+              onComment={(postId, text) => console.log('Comment on post:', postId, text)}
+              onShare={(postId) => console.log('Share post:', postId)}
+            />
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Mission Detail Modal */}
       <Modal
-        visible={showDescriptionModal}
+        animationType="slide"
         transparent={true}
-        animationType="fade"
-        onRequestClose={toggleDescriptionModal}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Görev Açıklaması</Text>
-              <Pressable onPress={toggleDescriptionModal} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#64748b" />
+              <Text style={styles.modalTitle}>Görev Detayı</Text>
+              <Pressable onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1e293b" />
               </Pressable>
             </View>
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.modalDescription}>{description}</Text>
+            <ScrollView style={styles.modalScrollView}>
+              <Text style={styles.modalDescription}>{mission.description}</Text>
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  dimText: { color: '#64748b', fontSize: 14, textAlign: 'center' },
-
-  // Ranking
-  rankingSection: { 
-    marginBottom: 12, 
-    paddingVertical: 12, 
-    backgroundColor: '#f8fafc', 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    borderColor: '#e2e8f0', 
-    flexDirection: 'row', 
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden'
   },
-  stickyBrandLogo: { 
-    position: 'absolute', 
-    left: 8, 
-    top: 8, 
-    zIndex: 100, 
-    backgroundColor: '#fff', 
-    borderRadius: 27, 
-    padding: 6, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 6, 
-    elevation: 8,
-    borderWidth: 2,
-    borderColor: '#e2e8f0'
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
   },
-  stickyBrandImage: { width: 54, height: 54, borderRadius: 27 },
-  rankingScrollView: { flex: 1, marginLeft: 80 },
-  rankingScrollContent: { paddingRight: 8 },
-  rankingItem: { 
-    alignItems: 'center', 
-    marginRight: 8, 
-    width: 70 
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 2
-  },
-  avatarBorder: { 
-    width: 60, 
-    height: 60, 
-    borderRadius: 30, 
-    borderWidth: 3, 
-    justifyContent: 'center', 
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff'
   },
-  rankingAvatar: { 
-    width: 54, 
-    height: 54, 
-    borderRadius: 27 
+  errorText: {
+    fontSize: 16,
+    color: '#ef4444',
   },
-  rankBadge: { 
-    position: 'absolute', 
-    top: -2, 
-    right: -2, 
-    width: 24, 
-    height: 24, 
-    borderRadius: 12, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderWidth: 3, 
-    borderColor: '#fff',
+  rankingSection: {
+    paddingVertical: 12,
+    paddingBottom: 16,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  rankingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandLogoFixed: {
+    position: 'absolute',
+    left: 16,
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 8,
+  },
+  rankingScroll: {
+    paddingLeft: 80,
+    paddingRight: 16,
+    paddingVertical: 4,
+  },
+  brandLogoContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandLogoRanking: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    resizeMode: 'contain',
+  },
+  rankingItem: {
+    alignItems: 'center',
+    marginRight: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 8,
+    paddingBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 3
+    elevation: 2,
+    minWidth: 70,
+    minHeight: 75,
   },
-  rankText: { 
-    fontSize: 11, 
-    fontWeight: '800', 
-    color: '#fff' 
+  rankingAvatarContainer: {
+    position: 'relative',
+    marginBottom: 4,
   },
-  likesRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 3, 
-    marginTop: 0 
+  rankingAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
   },
-  likesText: { 
-    color: '#64748b', 
-    fontSize: 11, 
-    fontWeight: '600' 
-  },
-
-  // Mission card
-  card: { borderRadius: 16, overflow: 'hidden', height: 210, position: 'relative' },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  overlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
-
-  brandChip: { position: 'absolute', top: 16, left: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  brandLogo: { width: 20, height: 20, borderRadius: 10, marginRight: 6 },
-  brandName: { color: '#fff', fontWeight: '600', fontSize: 13 },
-
-  // Sponsored styles
-  sponsoredChip: { position: 'absolute', top: 16, right: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.8)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  sponsoredByText: { color: '#fff', fontWeight: '500', fontSize: 10, marginRight: 4 },
-  sponsorLogo: { width: 16, height: 16, borderRadius: 8, marginRight: 4 },
-  sponsorText: { color: '#fff', fontWeight: '600', fontSize: 11 },
-
-  // Sponsored By Section (below ranking)
-  sponsoredBySection: { marginTop: 12, marginBottom: 8 },
-  sponsoredBySectionChip: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#ef4444', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  sponsoredBySectionText: { 
-    fontSize: 10, 
-    color: '#ffffff', 
-    fontWeight: '600', 
-    marginRight: 3, 
-    textShadowColor: 'rgba(0, 0, 0, 0.5)', 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2, 
-  },
-  sponsoredBySectionLogo: { 
-    width: 12, 
-    height: 12, 
-    borderRadius: 6, 
-    marginRight: 4, 
-  },
-  sponsoredBySectionSponsorText: { 
-    fontSize: 10, 
-    color: '#ffffff', 
-    fontWeight: '600', 
-    textShadowColor: 'rgba(0, 0, 0, 0.5)', 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2, 
-  },
-
-
-  topRight: { position: 'absolute', top: 16, right: 16, alignItems: 'flex-end' },
-  timePill: { backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 8 },
-  timeText: { color: '#fff', fontWeight: '600', fontSize: 12 },
-  qpWrap: { borderRadius: 12, overflow: 'hidden', elevation: 4 },
-  qpGrad: { paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', justifyContent: 'center' },
-  qpText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-
-  titleWrap: { position: 'absolute', top: '50%', left: 16, right: 16, transform: [{ translateY: -12 }] },
-  title: { color: '#fff', fontSize: 14, fontWeight: '600', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2, lineHeight: 20 },
-  readMoreBtn: { marginTop: 8, alignSelf: 'center' },
-  readMoreText: { color: '#00bcd4', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-
-  bottomRow: { position: 'absolute', bottom: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 4 },
-  statsText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  ctaBtn: { 
-    minWidth: 120, 
-    borderRadius: 12, 
-    overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+  rankBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: '#ffffff',
   },
-  ctaGrad: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 10, 
-    paddingHorizontal: 14,
-    borderRadius: 10,
+  rankText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
-  ctaText: { 
-    color: '#fff', 
-    fontWeight: '800', 
-    fontSize: 15,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+  rankingStats: {
+    alignItems: 'center',
+  },
+  rankingStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  rankingStatText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  missionCard: {
+    ...card3DStyles.card3DMission,
+    width: width - 32,
+    height: 240,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    position: 'relative',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  missionImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+    borderRadius: 20,
+  },
+  missionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  brandInfo: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  brandLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 6,
+    resizeMode: 'contain',
+  },
+  brandName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-
-  // Modal styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#fff', borderRadius: 16, width: '100%', maxHeight: '80%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-  closeBtn: { padding: 4 },
-  modalBody: { padding: 20 },
-  modalDescription: { fontSize: 16, lineHeight: 24, color: '#1e293b' },
-
-  // Sponsored Below Brand (in mission card)
-  sponsoredBelowBrand: { 
-    position: 'absolute', 
-    top: 50, // Below brand chip
-    left: 16, 
+  topRightContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    alignItems: 'flex-end',
+    zIndex: 10,
   },
-  sponsoredBelowBrandChip: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#ef4444', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 16,
+  countdownContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countdownIcon: {
+    marginRight: 4,
+  },
+  countdownText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  qpContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  qpGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  qpText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: fonts.comfortaa.bold,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  missionDescriptionContainer: {
+    position: 'absolute',
+    top: '45%',
+    left: 12,
+    right: 12,
+    transform: [{ translateY: -10 }],
+    alignItems: 'center',
+  },
+  missionDescription: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    lineHeight: 18,
+  },
+  readMoreText: {
+    color: '#06b6d4',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  actionButtons: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
   },
-  sponsoredBelowBrandText: { 
-    fontSize: 10, 
-    color: '#ffffff', 
-    fontWeight: '600', 
-    marginRight: 3, 
-    textShadowColor: 'rgba(0, 0, 0, 0.5)', 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2, 
+  statGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
   },
-  sponsoredBelowBrandLogo: { 
-    width: 12, 
-    height: 12, 
-    borderRadius: 6, 
-    marginRight: 4, 
+  statText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  sponsoredBelowBrandSponsorText: { 
-    fontSize: 10, 
-    color: '#ffffff', 
-    fontWeight: '600', 
-    textShadowColor: 'rgba(0, 0, 0, 0.5)', 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2, 
+  qappishleButtonCompact: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#06b6d4',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: '#06b6d4',
   },
-
-  // Feed Section styles
-  feedSection: {
-    marginTop: 24,
-  },
-  feedList: {
-    gap: 0, // FeedCard'lar arasında boşluk yok, tam ana akış gibi
-  },
-  feedLoading: {
+  qappishleGradientCompact: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
-  feedLoadingText: {
-    fontSize: 14,
-    color: '#64748b',
+  cameraIconContainer: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
-
-  // Button styles
-  ghostBtn: {
+  postsSection: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: '#f9fafb',
+    marginBottom: 20,
   },
-  ghostBtnText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '500',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  primaryBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#3b82f6',
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    margin: 20,
+    maxHeight: '80%',
+    width: '90%',
   },
-  primaryBtnText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  modalScrollView: {
+    maxHeight: 400,
+  },
+  modalDescription: {
+    fontSize: 16,
+    color: '#1e293b',
+    lineHeight: 24,
+    padding: 20,
   },
 });

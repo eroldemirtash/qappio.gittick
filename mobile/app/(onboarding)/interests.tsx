@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/src/store/useAuth';
+// Auth imports geçici olarak devre dışı
 
 const INTERESTS = [
   'Teknoloji', 'Spor', 'Müzik', 'Sanat', 'Moda', 'Yemek',
@@ -11,7 +11,7 @@ const INTERESTS = [
 export default function InterestsScreen() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const router = useRouter();
-  const { updateProfile } = useAuth();
+  // Auth geçici olarak devre dışı
 
   const toggleInterest = (interest: string) => {
     setSelectedInterests(prev => 
@@ -21,18 +21,9 @@ export default function InterestsScreen() {
     );
   };
 
-  const handleContinue = async () => {
-    if (selectedInterests.length === 0) return;
-    
-    try {
-      // Update profile with interests
-      await updateProfile({ 
-        // interests: selectedInterests // Add this field to your profile schema
-      });
-      router.push('/(onboarding)/city');
-    } catch (error) {
-      console.error('Interests update error:', error);
-    }
+  const handleContinue = () => {
+    // Direkt ana uygulamaya yönlendir
+    router.replace('/(tabs)');
   };
 
   return (
@@ -65,14 +56,11 @@ export default function InterestsScreen() {
       </ScrollView>
 
       <Pressable
-        className={`py-4 rounded-xl ${
-          selectedInterests.length > 0 ? 'bg-primary' : 'bg-sub'
-        }`}
+        className="py-4 rounded-xl bg-primary"
         onPress={handleContinue}
-        disabled={selectedInterests.length === 0}
       >
         <Text className="text-center text-white font-semibold text-base">
-          Devam Et ({selectedInterests.length})
+          Ana Uygulamaya Git
         </Text>
       </Pressable>
     </View>

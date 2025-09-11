@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { jpost, jget } from "@/lib/fetcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -115,15 +115,16 @@ interface Brand {
 
 export const dynamic = "force-dynamic";
 
-export default function BrandProfileNewPage() {
+function BrandProfileNewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   
-  const { register, handleSubmit, formState: { errors }, setValue, watch, trigger } = useForm<FormVals>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch, trigger, reset } = useForm<FormVals>({
     resolver: zodResolver(Schema),
     defaultValues: {
       license_plan: "freemium",
@@ -152,6 +153,15 @@ export default function BrandProfileNewPage() {
       form.append("type", type === "logo" ? "avatar" : "cover");
       console.log('Uploading to /api/storage/brand-assets');
       const res = await fetch("/api/storage/brand-assets", { method: "POST", body: form });
+      
+      // Check if response is JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('Non-JSON response:', { status: res.status, text: text.substring(0, 200) });
+        throw new Error(`API returned non-JSON response (${res.status}): ${text.substring(0, 100)}...`);
+      }
+      
       const json = await res.json();
       console.log('Upload response:', { res, json });
       if (!res.ok) throw new Error(json?.error || "Upload failed");
@@ -187,93 +197,92 @@ export default function BrandProfileNewPage() {
       // Mevcut marka ve profil bilgilerini yükle
       const fetchBrandData = async () => {
         try {
-          const brandData = await jget(`/api/brands/${editId}`);
-          const profileData = await jget(`/api/brands/${editId}/profile`);
+          let brandData = await jget(`/api/brands/${editId}`);
+          let profileData = await jget(`/api/brands/${editId}/profile`);
           
           console.log("Brand Data:", brandData);
           console.log("Profile Data:", profileData);
           
-          if (brandData?.item) {
-            setValue("brand_name", brandData.item.name);
-            
-            // Brand data'dan gelen profile bilgilerini de kullan
-            if (brandData.item.brand_profiles) {
-              const profile = brandData.item.brand_profiles;
-              console.log("Brand profile from brands API:", profile);
-              setValue("display_name", profile.display_name || "");
-              setValue("email", profile.email || "");
-              setValue("phone", profile.phone || "");
-              setValue("website", profile.website || "");
-              setValue("category", profile.category || "");
-              setValue("license_plan", profile.license_plan || "freemium");
-              setValue("license_start", profile.license_start || "");
-              setValue("license_end", profile.license_end || "");
-              setValue("license_fee", profile.license_fee || 0);
-
-              setValue("address", profile.address || "");
-              setValue("description", profile.description || "");
-              setValue("social_instagram", profile.social_instagram || "");
-              setValue("social_twitter", profile.social_twitter || "");
-              setValue("social_facebook", profile.social_facebook || "");
-              setValue("social_linkedin", profile.social_linkedin || "");
-              setValue("logo_url", profile.logo_url || profile.avatar_url || "");
-              setValue("cover_url", profile.cover_url || "");
-              
-              if (profile.features) {
-                setValue("features", profile.features);
-              }
+          // If no profile exists at all, auto-create a minimal one and refetch
+          if (brandData?.item && !brandData.item.brand_profiles && !profileData?.item) {
+            try {
+              await jpost(`/api/brands/${editId}/profile`, { display_name: brandData.item.name });
+              // refetch
+              brandData = await jget(`/api/brands/${editId}`);
+              profileData = await jget(`/api/brands/${editId}/profile`);
+            } catch (e) {
+              // non-blocking
             }
           }
-          
-          // Eğer brands API'de profile yoksa, ayrı profile API'yi kullan
-          if (profileData?.item && !brandData?.item?.brand_profiles) {
-            const profile = profileData.item;
-            console.log("Profile item from profile API:", profile);
-            setValue("display_name", profile.display_name || "");
-            setValue("email", profile.email || "");
-            setValue("phone", profile.phone || "");
-            setValue("website", profile.website || "");
-            setValue("category", profile.category || "");
-            setValue("license_plan", profile.license_plan || "freemium");
-            setValue("license_start", profile.license_start || "");
-            setValue("license_end", profile.license_end || "");
-            setValue("license_fee", profile.license_fee || 0);
 
-            setValue("address", profile.address || "");
-            setValue("description", profile.description || "");
-            setValue("social_instagram", profile.social_instagram || "");
-            setValue("social_twitter", profile.social_twitter || "");
-            setValue("social_facebook", profile.social_facebook || "");
-            setValue("social_linkedin", profile.social_linkedin || "");
-            setValue("logo_url", profile.logo_url || profile.avatar_url || "");
-            setValue("cover_url", profile.cover_url || "");
-            
-            if (profile.features) {
-              setValue("features", profile.features);
-            }
+          if (brandData?.item) {
+            const brandName = brandData.item.name || "";
+            const profile = brandData.item.brand_profiles || profileData?.item || {};
+            reset({
+              brand_name: brandName,
+              display_name: profile.display_name || brandName || "",
+              email: profile.email || "",
+              phone: profile.phone || "",
+              website: profile.website || "",
+              category: profile.category || "",
+              license_plan: profile.license_plan || "freemium",
+              license_start: profile.license_start || "",
+              license_end: profile.license_end || "",
+              license_fee: profile.license_fee ?? 0,
+              address: profile.address || "",
+              description: profile.description || "",
+              social_instagram: profile.social_instagram || "",
+              social_twitter: profile.social_twitter || "",
+              social_facebook: profile.social_facebook || "",
+              social_linkedin: profile.social_linkedin || "",
+              logo_url: profile.logo_url || profile.avatar_url || "",
+              avatar_url: profile.avatar_url || profile.logo_url || "",
+              cover_url: profile.cover_url || "",
+              features: profile.features || { task_creation:false, user_management:false, analytics:false, api_access:false, priority_support:false },
+            });
+            setLoaded(true);
           }
         } catch (error) {
           console.error("Error fetching brand data:", error);
+          setLoaded(true);
         }
       };
       
       fetchBrandData();
+    } else {
+      setLoaded(true);
     }
-  }, [searchParams, setValue]);
+  }, [searchParams, reset]);
 
   async function onSubmit(v: FormVals) {
     try {
       setIsSubmitting(true);
+      let newBrandId: string | null = null;
+      // sanitize payload: drop empty strings and nullish
+      const sanitize = (obj: Record<string, any>) => {
+        const out: Record<string, any> = {};
+        for (const [k, val] of Object.entries(obj)) {
+          if (val === undefined) continue;
+          if (typeof val === "string" && val.trim() === "") continue;
+          out[k] = val;
+        }
+        return out;
+      };
       
       if (isEditMode && selectedBrandId) {
         // Güncelleme modu
-        await jpost(`/api/brands/${selectedBrandId}/profile`, {
+        await jpost(`/api/brands/${selectedBrandId}/profile`, sanitize({
           display_name: v.display_name,
           category: v.category,
           description: v.description,
           email: v.email,
           phone: v.phone,
           website: v.website,
+          address: v.address,
+          social_instagram: v.social_instagram,
+          social_twitter: v.social_twitter,
+          social_facebook: v.social_facebook,
+          social_linkedin: v.social_linkedin,
           avatar_url: v.logo_url,
           cover_url: v.cover_url,
           license_plan: v.license_plan,
@@ -281,24 +290,35 @@ export default function BrandProfileNewPage() {
           license_end: v.license_end,
           license_fee: v.license_fee,
           features: v.features
-        });
+        }));
         
         toast.success("Marka profili güncellendi");
+        router.replace(`/brands?newId=${selectedBrandId}`);
       } else {
         // Yeni oluşturma modu
-        const brandResponse = await jpost("/api/brands", { 
-          name: v.brand_name, 
-          is_active: true 
+        const brandResponse = await jpost("/api/brands", {
+          name: v.brand_name,
+          is_active: true,
         });
-        const brandId = brandResponse.item.id;
+        // API yanıtı iki şekilde dönebiliyor: { id, ... } veya { item: { id, ... } }
+        const brandId = (brandResponse && (brandResponse.id || brandResponse.item?.id));
+        if (!brandId) {
+          throw new Error("Brand oluşturuldu fakat ID alınamadı");
+        }
+        newBrandId = String(brandId);
         
-        await jpost(`/api/brands/${brandId}/profile`, {
+        await jpost(`/api/brands/${brandId}/profile`, sanitize({
           display_name: v.display_name,
           category: v.category,
           description: v.description,
           email: v.email,
           phone: v.phone,
           website: v.website,
+          address: v.address,
+          social_instagram: v.social_instagram,
+          social_twitter: v.social_twitter,
+          social_facebook: v.social_facebook,
+          social_linkedin: v.social_linkedin,
           avatar_url: v.logo_url,
           cover_url: v.cover_url,
           license_plan: v.license_plan,
@@ -306,12 +326,43 @@ export default function BrandProfileNewPage() {
           license_end: v.license_end,
           license_fee: v.license_fee,
           features: v.features
-        });
+        }));
         
+        // Optimistic hint for Brands page to render immediately
+        try {
+          const tempBrand = {
+            id: brandId,
+            name: v.brand_name,
+            logo_url: v.logo_url || null,
+            brand_profiles: {
+              display_name: v.display_name,
+              category: v.category,
+              email: v.email || null,
+              phone: v.phone || null,
+              website: v.website || null,
+              avatar_url: v.logo_url || null,
+              license_plan: v.license_plan || "freemium",
+            },
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as any;
+          // Single item hint
+          window.localStorage.setItem("lastCreatedBrand", JSON.stringify(tempBrand));
+          // Queue for robustness (multiple creations)
+          const qRaw = window.localStorage.getItem("createdBrandsQueue");
+          const q = Array.isArray(JSON.parse(qRaw || "null")) ? JSON.parse(qRaw || "[]") : [];
+          q.unshift(tempBrand);
+          window.localStorage.setItem("createdBrandsQueue", JSON.stringify(q.slice(0, 10)));
+        } catch {}
+
         toast.success("Marka profili oluşturuldu");
       }
       
-      router.push("/brands");
+      if (!isEditMode) {
+        const idToNavigate = newBrandId;
+        router.replace(idToNavigate ? `/brands?newId=${idToNavigate}` : `/brands`);
+      }
     } catch (error: any) {
       toast.error(error.message || "Bir hata oluştu");
     } finally {
@@ -564,13 +615,16 @@ export default function BrandProfileNewPage() {
                 <div className="mt-2">
                   <p className="text-xs text-slate-500 mb-1">Önizleme:</p>
                   <img 
-                    key={`${logoUrl}-${forceUpdate}`} // Force re-render when URL changes
-                    src={`${logoUrl}?t=${Date.now()}`} // Cache busting
+                    key={`${logoUrl}-${forceUpdate}`}
+                    src={`${logoUrl}${logoUrl.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`}`}
                     alt="Logo önizleme" 
                     className="w-16 h-16 object-cover rounded-lg border border-slate-200"
                     onError={(e) => {
                       console.error('Logo preview failed to load:', logoUrl);
+                      // Hide broken preview and clear invalid url from form
                       e.currentTarget.style.display = 'none';
+                      setValue("logo_url", "");
+                      setValue("avatar_url", "");
                     }}
                   />
                 </div>
@@ -636,5 +690,13 @@ export default function BrandProfileNewPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function BrandProfileNewPage() {
+  return (
+    <Suspense fallback={<div className="page"><div className="card p-6">Yükleniyor...</div></div>}>
+      <BrandProfileNewPageContent />
+    </Suspense>
   );
 }

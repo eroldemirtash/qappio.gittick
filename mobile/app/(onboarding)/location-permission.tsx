@@ -1,46 +1,21 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Alert } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Location from 'expo-location';
-import { useSession } from '@/src/store/useSession';
+// Location imports geçici olarak devre dışı
 
 export default function LocationPermissionScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { setOnboarded } = useSession();
+  // Session geçici olarak devre dışı
 
-  const requestLocationPermission = async () => {
+  const requestLocationPermission = () => {
     setLoading(true);
-    
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      
-      if (status === 'granted') {
-        setOnboarded(true);
-        router.replace('/(tabs)');
-      } else {
-        Alert.alert(
-          'Konum İzni',
-          'Konum izni verilmedi. Görevler için konum gerekli olabilir.',
-          [
-            { text: 'Tekrar Dene', onPress: requestLocationPermission },
-            { text: 'Atla', onPress: () => {
-              setOnboarded(true);
-              router.replace('/(tabs)');
-            }}
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('Location permission error:', error);
-      Alert.alert('Hata', 'Konum izni alınamadı.');
-    } finally {
-      setLoading(false);
-    }
+    // Direkt ana uygulamaya yönlendir
+    router.replace('/(tabs)');
   };
 
   const skipLocation = () => {
-    setOnboarded(true);
+    // Direkt ana uygulamaya yönlendir
     router.replace('/(tabs)');
   };
 

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Avatar } from "@/components/ui/Avatar";
 import { Users, Search, Filter } from "lucide-react";
+import { IoLogoInstagram, IoLogoFacebook, IoLogoTiktok, IoLogoTwitter } from "react-icons/io5";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,55 @@ export default function UsersPage() {
                       <p className="text-xs text-slate-500">Harcanabilir QP</p>
                     </div>
                   </div>
+
+                  {/* Social Media Links */}
+                  {user.socials && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Sosyal Medya</h4>
+                      <div className="flex gap-2">
+                        {user.socials.instagram && (
+                          <a href={`https://instagram.com/${user.socials.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:text-pink-700">
+                            <IoLogoInstagram size={16} />
+                          </a>
+                        )}
+                        {user.socials.facebook && (
+                          <a href={user.socials.facebook} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
+                            <IoLogoFacebook size={16} />
+                          </a>
+                        )}
+                        {user.socials.tiktok && (
+                          <a href={`https://tiktok.com/@${user.socials.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-black hover:text-gray-700">
+                            <IoLogoTiktok size={16} />
+                          </a>
+                        )}
+                        {user.socials.twitter && (
+                          <a href={`https://twitter.com/${user.socials.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:text-sky-700">
+                            <IoLogoTwitter size={16} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Personal Info */}
+                  {(user.email || user.phone || user.address) && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Kişisel Bilgiler</h4>
+                      <div className="space-y-1 text-xs text-slate-600">
+                        {user.email && <p>📧 {user.email}</p>}
+                        {user.phone && <p>📱 {user.phone}</p>}
+                        {user.address && <p>📍 {user.address}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bio */}
+                  {user.bio && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-slate-700 mb-1">Bio</h4>
+                      <p className="text-xs text-slate-600">{user.bio}</p>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm" className="flex-1">Detay</Button>

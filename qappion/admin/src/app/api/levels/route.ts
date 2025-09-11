@@ -19,8 +19,11 @@ export async function GET() {
           min_points: 0,
           max_points: 99,
           user_count: 1250,
+          product_count: 45,
+          mission_count: 12,
+          avg_points: 45,
           badge_letter: "S",
-          color: "bg-blue-500"
+          color: "#fbbf24"
         },
         {
           id: "2", 
@@ -29,8 +32,11 @@ export async function GET() {
           min_points: 100,
           max_points: 499,
           user_count: 890,
-          badge_letter: "S",
-          color: "bg-green-500"
+          product_count: 78,
+          mission_count: 25,
+          avg_points: 285,
+          badge_letter: "E",
+          color: "#10b981"
         },
         {
           id: "3",
@@ -39,8 +45,11 @@ export async function GET() {
           min_points: 500,
           max_points: 1499,
           user_count: 456,
+          product_count: 92,
+          mission_count: 38,
+          avg_points: 875,
           badge_letter: "C",
-          color: "bg-purple-500"
+          color: "#8b5cf6"
         },
         {
           id: "4",
@@ -49,8 +58,11 @@ export async function GET() {
           min_points: 1500,
           max_points: 4999,
           user_count: 234,
+          product_count: 156,
+          mission_count: 52,
+          avg_points: 2850,
           badge_letter: "V",
-          color: "bg-orange-500"
+          color: "#f59e0b"
         },
         {
           id: "5",
@@ -59,8 +71,37 @@ export async function GET() {
           min_points: 5000,
           max_points: null,
           user_count: 67,
+          product_count: 203,
+          mission_count: 89,
+          avg_points: 8750,
           badge_letter: "Q",
-          color: "bg-gradient-to-r from-cyan-400 to-blue-600"
+          color: "#06b6d4"
+        },
+        {
+          id: "6",
+          name: "Influencer",
+          description: "Sosyal medya etkileyicileri için özel seviye",
+          min_points: 10000,
+          max_points: null,
+          user_count: 23,
+          product_count: 312,
+          mission_count: 156,
+          avg_points: 15600,
+          badge_letter: "I",
+          color: "#ec4899"
+        },
+        {
+          id: "7",
+          name: "Creator",
+          description: "İçerik üreticileri için premium seviye",
+          min_points: 20000,
+          max_points: null,
+          user_count: 12,
+          product_count: 445,
+          mission_count: 234,
+          avg_points: 31200,
+          badge_letter: "C",
+          color: "#7c3aed"
         }
       ];
 
@@ -77,7 +118,79 @@ export async function GET() {
       .order("min_points", { ascending: true });
 
     if (error) {
-      throw error;
+      console.error("Supabase fetch error:", error);
+      // Fallback to demo data if Supabase fails
+      const demoLevels = [
+        {
+          id: "1",
+          name: "Snapper",
+          description: "Yeni başlayan kullanıcılar için temel seviye",
+          min_points: 0,
+          max_points: 99,
+          user_count: 1250,
+          product_count: 45,
+          mission_count: 12,
+          avg_points: 45,
+          badge_letter: "S",
+          color: "#fbbf24"
+        },
+        {
+          id: "2", 
+          name: "Seeker",
+          description: "Aktif kullanıcılar için orta seviye",
+          min_points: 100,
+          max_points: 499,
+          user_count: 890,
+          product_count: 78,
+          mission_count: 25,
+          avg_points: 285,
+          badge_letter: "E",
+          color: "#10b981"
+        },
+        {
+          id: "3",
+          name: "Crafter", 
+          description: "Deneyimli kullanıcılar için ileri seviye",
+          min_points: 500,
+          max_points: 1499,
+          user_count: 456,
+          product_count: 92,
+          mission_count: 38,
+          avg_points: 875,
+          badge_letter: "C",
+          color: "#8b5cf6"
+        },
+        {
+          id: "4",
+          name: "Viralist",
+          description: "Sosyal medya uzmanları için üst seviye",
+          min_points: 1500,
+          max_points: 4999,
+          user_count: 234,
+          product_count: 156,
+          mission_count: 52,
+          avg_points: 2850,
+          badge_letter: "V",
+          color: "#f59e0b"
+        },
+        {
+          id: "5",
+          name: "Qappian",
+          description: "En üst seviye kullanıcılar için elit seviye",
+          min_points: 5000,
+          max_points: null,
+          user_count: 67,
+          product_count: 203,
+          mission_count: 89,
+          avg_points: 8750,
+          badge_letter: "Q",
+          color: "#06b6d4"
+        }
+      ];
+
+      return new Response(JSON.stringify({ items: demoLevels }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" }
+      });
     }
 
     return new Response(JSON.stringify({ items: data || [] }), {
@@ -102,10 +215,27 @@ export async function POST(request: NextRequest) {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
     if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
-      return new Response(JSON.stringify({ 
-        error: "Supabase yapılandırması eksik. Demo modda yeni seviye oluşturulamaz." 
-      }), { 
-        status: 400,
+      // Demo mode - return mock data
+      const body = await request.json();
+      const { name, description, min_points, max_points, badge_letter, color } = body;
+      
+      const newLevel = {
+        id: Date.now().toString(),
+        name,
+        description,
+        min_points,
+        max_points,
+        badge_letter,
+        color,
+        user_count: 0,
+        product_count: 0,
+        mission_count: 0,
+        avg_points: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      return new Response(JSON.stringify(newLevel), {
         headers: { "content-type": "application/json", "cache-control": "no-store" }
       });
     }

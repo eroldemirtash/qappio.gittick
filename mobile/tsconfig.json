@@ -18,12 +18,12 @@
     "expo-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.d.ts",
     "expo-router/entry",
     "nativewind-env.d.ts",
     ".expo/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "test53"
   ]
 }

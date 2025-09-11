@@ -13,12 +13,14 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/comfortaa": "^0.4.2",
     "@expo/vector-icons": "^14.1.0",
     "@hookform/resolvers": "^5.2.1",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@supabase/supabase-js": "^2.57.0",
     "expo": "~53.0.22",
     "expo-dev-client": "~5.2.4",
+    "expo-font": "~13.3.2",
     "expo-image-picker": "~16.1.4",
     "expo-linear-gradient": "~14.1.5",
     "expo-location": "~18.1.6",
@@ -40,7 +42,8 @@
     "tailwindcss": "^3.4.17",
     "vitest": "^3.2.4",
     "zod": "^4.1.5",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "expo-splash-screen": "~0.30.10"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

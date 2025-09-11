@@ -1,5 +1,5 @@
 export async function jget<T = any>(url: string): Promise<T> {
-  const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+  const fullUrl = url;
   const response = await fetch(fullUrl, {
     cache: "no-store",
     headers: {
@@ -16,7 +16,7 @@ export async function jget<T = any>(url: string): Promise<T> {
 }
 
 export async function jpost<T = any>(url: string, data: any): Promise<T> {
-  const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+  const fullUrl = url;
   const response = await fetch(fullUrl, {
     method: "POST",
     cache: "no-store",
@@ -35,7 +35,7 @@ export async function jpost<T = any>(url: string, data: any): Promise<T> {
 }
 
 export async function jpatch<T = any>(url: string, data: any): Promise<T> {
-  const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+  const fullUrl = url;
   const response = await fetch(fullUrl, {
     method: "PATCH",
     cache: "no-store",
@@ -54,7 +54,7 @@ export async function jpatch<T = any>(url: string, data: any): Promise<T> {
 }
 
 export async function jdelete<T = any>(url: string): Promise<T> {
-  const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+  const fullUrl = url;
   const response = await fetch(fullUrl, {
     method: "DELETE",
     cache: "no-store",

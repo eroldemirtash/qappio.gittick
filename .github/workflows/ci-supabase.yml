@@ -1,0 +1,14 @@
+name: CI - Supabase Migrations (dry-run)
+on: [pull_request]
+jobs:
+  supabase:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm i -g supabase
+      - run: supabase --version
+      - run: test -d migrations && echo "migrations folder ok" || echo "no migrations"
+

@@ -1,24 +1,27 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+// AuthGuard geçici olarak devre dışı
 
 export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ 
-      headerShown: false,
-      tabBarStyle: {
-        height: 80,
-        paddingBottom: 10,
-        paddingTop: 10,
-      },
-      tabBarLabelStyle: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginTop: 4,
-      },
-      tabBarIconStyle: {
-        marginTop: 4,
-      }
-    }}>
+        headerShown: false,
+        tabBarStyle: {
+          height: 68, // bir tık daraltıldı
+          paddingBottom: 6,
+          paddingTop: 6,
+        },
+        tabBarActiveTintColor: '#06b6d4', // Qappio turkuaz
+        tabBarInactiveTintColor: '#64748b',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        }
+      }}>
       {/* 1. Akış */}
       <Tabs.Screen 
         name="index" 
@@ -37,13 +40,16 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="bag-outline" color={color} size={28} />
         }} 
       />
-      {/* 3. Qappiolar */}
+      {/* 3. Qappiolar - Ortada */}
       <Tabs.Screen 
-        name="qappios/index" 
+        name="qappiolar" 
         options={{ 
           title: 'Qappiolar',
           tabBarLabel: 'Qappiolar',
-          tabBarIcon: ({ color, size }) => <Ionicons name="star-outline" color={color} size={28} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'star' : 'star-outline'} color={color} size={28} />
+          ),
+          tabBarItemStyle: { marginHorizontal: 10 },
         }} 
       />
       {/* 4. Cüzdan */}
@@ -64,6 +70,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={28} />
         }} 
       />
-    </Tabs>
+      </Tabs>
   );
 }

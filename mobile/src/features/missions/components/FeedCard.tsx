@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Pressable, Share, StyleSheet, Alert, Modal } from 'react-native';
+import { View, Text, Image, Pressable, Share, StyleSheet, Alert, Modal, Animated, TextInput, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { getLevelColor } from '@/src/lib/levels';
 
 interface FeedCardProps {
   post: any;
@@ -10,13 +11,48 @@ interface FeedCardProps {
   onShare: (postId: string) => void;
   onMoreOptions?: (post: any) => void;
   isGridView?: boolean;
+  isSelected?: boolean;
 }
 
-export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptions, isGridView = false }: FeedCardProps) {
+export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptions, isGridView = false, isSelected = false }: FeedCardProps) {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.like_count || 0);
+  const [commentCount, setCommentCount] = useState(post.comment_count || 0);
+  const [newComment, setNewComment] = useState('');
+  const [comments, setComments] = useState(Array.isArray(post.comments) ? post.comments : []);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteCount, setFavoriteCount] = useState(post.favorite_count || 0);
+  const [cardScale] = useState(new Animated.Value(1));
+
+  const animateButton = (scaleValue: Animated.Value, callback?: () => void) => {
+    Animated.sequence([
+      Animated.timing(scaleValue, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleValue, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      if (callback) callback();
+    });
+  };
+
+  const handleBrandPress = () => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const raw = post?.mission?.brand_id || post?.mission?.brand?.id || post?.mission?.brandId;
+    const nameFallback = post?.mission?.brand?.name;
+    const target = uuidRegex.test(String(raw || '')) ? raw : (nameFallback || raw);
+    if (target) {
+      router.push(`/brands/${encodeURIComponent(String(target))}`);
+    }
+  };
   const handleShare = async () => {
     try {
       await Share.share({
@@ -27,6 +63,13 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
     } catch (error) {
       console.error('Share error:', error);
     }
+  };
+
+  const handleFavorite = () => {
+    setIsFavorited(!isFavorited);
+    setFavoriteCount((prev: number) => isFavorited ? prev - 1 : prev + 1);
+    // Gerçek uygulamada Supabase'e favori durumu kaydedilecek
+    console.log('Favori durumu değişti:', !isFavorited);
   };
 
   const handleMoreOptions = () => {
@@ -40,15 +83,24 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
   };
 
   const handleCommentPress = () => {
-    Alert.prompt(
-      'Yorum Yap',
-      'Yorumunuzu yazın:',
-      (text) => {
-        if (text && text.trim()) {
-          onComment(post.id, text.trim());
-        }
-      }
-    );
+    setCommentModalVisible(true);
+  };
+
+  const handleSendComment = () => {
+    if (newComment.trim()) {
+      const comment = {
+        id: Date.now().toString(),
+        text: newComment.trim(),
+        username: 'Sen', // Gerçek uygulamada kullanıcı adı çekilecek
+        timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+        user_avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face'
+      };
+      
+      setComments((prev: any[]) => [comment, ...prev]);
+      setCommentCount((prev: number) => prev + 1);
+      setNewComment('');
+      onComment(post.id, newComment.trim());
+    }
   };
 
   const handleMissionTitle = () => {
@@ -57,16 +109,6 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
     }
   };
 
-  const getLevelColor = (levelName: string) => {
-    switch (levelName) {
-      case 'Snapper': return '#fbbf24'; // Yellow
-      case 'Seeker': return '#10b981'; // Green
-      case 'Crafter': return '#8b5cf6'; // Purple
-      case 'Viralist': return '#f59e0b'; // Orange
-      case 'Qappian': return '#06b6d4'; // Cyan
-      default: return '#6b7280'; // Default gray
-    }
-  };
 
   // Grid view için basit kart
   if (isGridView) {
@@ -83,26 +125,15 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
 
         {/* Brand Logo Overlay */}
         {post.mission?.brand && (
-          <View style={styles.gridBrandOverlay}>
+          <Pressable style={styles.gridBrandOverlay} onPress={() => animateButton(cardScale, handleBrandPress)}>
             <Image
               source={{ uri: post.mission.brand.logo_url || 'https://via.placeholder.com/16' }}
               style={styles.gridBrandLogo}
             />
             <Text style={styles.gridBrandName}>{post.mission.brand.name}</Text>
-          </View>
+          </Pressable>
         )}
 
-        {/* Sponsored By Overlay */}
-        {post.is_sponsored && post.sponsor_brand && (
-          <View style={styles.gridSponsoredOverlay}>
-            <Text style={styles.gridSponsoredByText}>Sponsored by</Text>
-            <Image
-              source={{ uri: post.sponsor_brand.logo_url || 'https://via.placeholder.com/12' }}
-              style={styles.gridSponsorLogo}
-            />
-            <Text style={styles.gridSponsorText}>{post.sponsor_brand.name}</Text>
-          </View>
-        )}
 
         {/* User Info */}
         <View style={styles.gridUserInfo}>
@@ -131,9 +162,24 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
           </View>
         )}
 
-        {/* Like Count */}
+        {/* Sponsored By - Below Image */}
+        {post.is_sponsored && post.sponsor_brand && (
+          <View style={styles.gridSponsoredBelow}>
+            <Text style={styles.gridSponsoredByTextBelow}>Sponsored by</Text>
+            <Image
+              source={{ uri: post.sponsor_brand.logo_url || 'https://via.placeholder.com/12' }}
+              style={styles.gridSponsorLogoBelow}
+            />
+            <Text style={styles.gridSponsorTextBelow}>{post.sponsor_brand.name}</Text>
+          </View>
+        )}
+
+        {/* Like and Favorite Count */}
         <View style={styles.gridLikeSection}>
-          <Pressable onPress={handleLike} style={styles.gridLikeButton}>
+          <Pressable 
+            onPress={() => animateButton(cardScale, handleLike)} 
+            style={styles.gridLikeButton}
+          >
             <Ionicons 
               name="heart" 
               size={16} 
@@ -141,13 +187,25 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
             />
             <Text style={[styles.gridLikeText, { color: "#ef4444" }]}>{likeCount}</Text>
           </Pressable>
+          <Pressable 
+            onPress={() => animateButton(cardScale, handleFavorite)} 
+            style={styles.gridLikeButton}
+          >
+            <Ionicons 
+              name={isFavorited ? "bookmark" : "bookmark-outline"} 
+              size={16} 
+              color={isFavorited ? "#fbbf24" : "#6b7280"} 
+            />
+            <Text style={[styles.gridLikeText, { color: isFavorited ? "#fbbf24" : "#6b7280" }]}>{favoriteCount}</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={{ transform: [{ scale: cardScale }] }}>
+      <View style={[styles.container, isSelected && styles.selectedContainer]}>
       {/* User Header */}
       <View style={styles.userHeader}>
         <View style={styles.userInfo}>
@@ -182,13 +240,13 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
           
           {/* Brand Logo Overlay - Top Left */}
           {post.mission?.brand && (
-            <View style={styles.brandOverlay}>
+            <Pressable style={styles.brandOverlay} onPress={() => animateButton(cardScale, handleBrandPress)}>
               <Image
                 source={{ uri: post.mission.brand.logo_url || 'https://via.placeholder.com/24' }}
                 style={styles.brandLogo}
               />
               <Text style={styles.brandName}>{post.mission.brand.name}</Text>
-            </View>
+            </Pressable>
           )}
           
           {/* Sponsored By Overlay - Top Right */}
@@ -218,9 +276,23 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
           </Pressable>
           <Pressable onPress={handleCommentPress} style={styles.actionButton}>
             <Ionicons name="chatbubble-outline" size={24} color="#6b7280" />
-            <Text style={styles.actionText}>{post.comment_count || 0}</Text>
+            <Text style={styles.actionText}>{commentCount}</Text>
           </Pressable>
-          <Pressable onPress={handleShare}>
+          <Pressable 
+            onPress={() => animateButton(cardScale, handleFavorite)} 
+            style={styles.actionButton}
+          >
+            <Ionicons 
+              name={isFavorited ? "bookmark" : "bookmark-outline"} 
+              size={24} 
+              color={isFavorited ? "#fbbf24" : "#6b7280"} 
+            />
+            <Text style={styles.actionText}>{favoriteCount}</Text>
+          </Pressable>
+          <Pressable 
+            onPress={() => animateButton(cardScale, handleShare)} 
+            style={styles.actionButton}
+          >
             <Ionicons name="paper-plane-outline" size={24} color="#6b7280" />
           </Pressable>
         </View>
@@ -231,11 +303,13 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
         <View style={styles.missionInfo}>
           <View style={styles.missionTag}>
             <Ionicons name="star" size={16} color="#fbbf24" />
-            <Image
-              source={{ uri: post.mission.brand?.logo_url || 'https://via.placeholder.com/20' }}
-              style={styles.missionBrandLogo}
-            />
-            <Text style={styles.missionBrandName}>{post.mission.brand?.name}</Text>
+            <Pressable onPress={() => animateButton(cardScale, handleBrandPress)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Image
+                source={{ uri: post.mission.brand?.logo_url || 'https://via.placeholder.com/20' }}
+                style={styles.missionBrandLogo}
+              />
+              <Text style={styles.missionBrandName}>{post.mission.brand?.name}</Text>
+            </Pressable>
             <Text style={styles.missionSeparator}>:</Text>
             <Pressable onPress={handleMissionTitle}>
               <Text style={styles.missionTitle}>{post.mission.title}</Text>
@@ -255,11 +329,11 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
       )}
 
       {/* Latest Comment */}
-      {post.latest_comment && (
+      {comments.length > 0 && (
         <View style={styles.comment}>
           <Text style={styles.commentText}>
-            <Text style={styles.commentUsername}>@{post.latest_comment.username}</Text>
-            {' '}{post.latest_comment.text}
+            <Text style={styles.commentUsername}>@{comments[0].username}</Text>
+            {' '}{comments[0].text}
           </Text>
         </View>
       )}
@@ -312,14 +386,84 @@ export default function FeedCard({ post, onLike, onComment, onShare, onMoreOptio
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* Comment Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={commentModalVisible}
+        onRequestClose={() => setCommentModalVisible(false)}
+      >
+        <View style={styles.commentModalOverlay}>
+          <View style={styles.commentModalContent}>
+            {/* Header */}
+            <View style={styles.commentModalHeader}>
+              <Text style={styles.commentModalTitle}>Yorumlar</Text>
+              <Pressable 
+                style={styles.commentModalCloseButton}
+                onPress={() => setCommentModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </Pressable>
+            </View>
+
+            {/* Comments List */}
+            <ScrollView style={styles.commentsList} showsVerticalScrollIndicator={false}>
+              {comments.map((comment: any) => (
+                <View key={comment.id} style={styles.commentItem}>
+                  <Image 
+                    source={{ uri: comment.user_avatar }} 
+                    style={styles.commentAvatar}
+                  />
+                  <View style={styles.commentContent}>
+                    <View style={styles.commentHeader}>
+                      <Text style={styles.commentUsernameInList}>@{comment.username}</Text>
+                      <Text style={styles.commentTime}>{comment.timestamp}</Text>
+                    </View>
+                    <Text style={styles.commentTextInList}>{comment.text}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Comment Input */}
+            <View style={styles.commentInputContainer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Yorum yazın..."
+                placeholderTextColor="#9ca3af"
+                value={newComment}
+                onChangeText={setNewComment}
+                multiline
+                maxLength={500}
+              />
+              <Pressable 
+                style={[
+                  styles.commentSendButton,
+                  newComment.trim() ? styles.commentSendButtonActive : styles.commentSendButtonInactive
+                ]}
+                onPress={handleSendComment}
+                disabled={!newComment.trim()}
+              >
+                <Ionicons 
+                  name="send" 
+                  size={20} 
+                  color={newComment.trim() ? '#ffffff' : '#9ca3af'} 
+                />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#ffffff',
-    marginHorizontal: 8,
+    marginHorizontal: 4,
     marginVertical: 4,
     borderRadius: 12,
     shadowColor: '#000',
@@ -327,6 +471,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  selectedContainer: {
+    borderWidth: 2,
+    borderColor: '#00bcd4',
+    shadowColor: '#00bcd4',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   userHeader: {
     flexDirection: 'row',
@@ -389,6 +541,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     marginRight: 6,
+    resizeMode: 'contain',
   },
   brandName: {
     color: '#ffffff',
@@ -679,6 +832,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   gridLikeSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     padding: 8,
     paddingTop: 0,
   },
@@ -736,5 +891,139 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 9,
     fontWeight: '600',
+  },
+  // Grid Sponsored Below Image Styles
+  gridSponsoredBelow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginHorizontal: 4,
+    marginVertical: 2,
+    alignSelf: 'flex-start',
+    maxWidth: '90%',
+  },
+  gridSponsoredByTextBelow: {
+    color: '#dc2626',
+    fontSize: 7,
+    fontWeight: '500',
+    marginRight: 2,
+  },
+  gridSponsorLogoBelow: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 2,
+  },
+  gridSponsorTextBelow: {
+    color: '#dc2626',
+    fontSize: 7,
+    fontWeight: '600',
+    flex: 1,
+  },
+  // Comment Modal Styles
+  commentModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  commentModalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    minHeight: '50%',
+  },
+  commentModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  commentModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  commentModalCloseButton: {
+    padding: 4,
+  },
+  commentsList: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  commentItem: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  commentAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 12,
+  },
+  commentContent: {
+    flex: 1,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  commentUsernameInList: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginRight: 8,
+  },
+  commentTime: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  commentTextInList: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  commentInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginRight: 12,
+    maxHeight: 100,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    fontSize: 14,
+  },
+  commentSendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commentSendButtonActive: {
+    backgroundColor: '#06b6d4',
+  },
+  commentSendButtonInactive: {
+    backgroundColor: '#e5e7eb',
   },
 });

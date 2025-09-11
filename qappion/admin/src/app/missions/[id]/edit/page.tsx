@@ -30,21 +30,21 @@ export default function EditMissionPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('🔍 Fetching mission with ID:', missionId);
+        
         // Fetch missions
         const missionsResponse = await jget<{ items: any[] }>("/api/missions");
+        console.log('🔍 Missions response:', missionsResponse);
+        
         const foundMission = missionsResponse.items.find(m => m.id === missionId);
+        console.log('🔍 Found mission:', foundMission);
+        
         if (foundMission) {
-          // Normalize fields for form
-          const mappedMission = {
-            ...foundMission,
-            reward_qp: (foundMission.qp_reward ?? foundMission.reward_qp ?? foundMission.reward_points ?? 0),
-            description: foundMission.short_description ?? foundMission.description ?? "",
-            published: foundMission.is_published ?? foundMission.published ?? false,
-            starts_at: foundMission.starts_at ?? null,
-            ends_at: foundMission.ends_at ?? null,
-          } as any;
-          setMission(mappedMission);
+          // Use the mission data directly without complex mapping
+          console.log('🔍 Setting mission state:', foundMission);
+          setMission(foundMission as any);
         } else {
+          console.log('❌ Mission not found for ID:', missionId);
           setError("Görev bulunamadı");
         }
 
@@ -52,6 +52,7 @@ export default function EditMissionPage() {
         const brandsResponse = await jget<{ items: any[] }>("/api/brands");
         setBrands(brandsResponse.items || []);
       } catch (err) {
+        console.error('❌ Fetch error:', err);
         setError(err instanceof Error ? err.message : "Bilinmeyen hata");
       } finally {
         setLoading(false);
@@ -66,6 +67,8 @@ export default function EditMissionPage() {
 
   const handleCoverUpload = async (file: File) => {
     try {
+      console.log('🔍 Uploading cover image:', file.name);
+      
       const form = new FormData();
       form.append("file", file);
       form.append("missionId", missionId);
@@ -74,12 +77,14 @@ export default function EditMissionPage() {
       const res = await fetch("/api/storage/mission-assets", { method: "POST", body: form });
       const json = await res.json();
       
+      console.log('🔍 Upload response:', json);
+      
       if (!res.ok) throw new Error(json?.error || "Upload failed");
       
       setMission({ ...mission!, cover_url: json.url });
       toast.success("Kapak görseli yüklendi");
     } catch (e: any) {
-      console.error("Upload error:", e);
+      console.error("❌ Upload error:", e);
       toast.error(e?.message || "Yükleme başarısız");
     }
   };
@@ -92,6 +97,7 @@ export default function EditMissionPage() {
       await jpatch(`/api/missions/${mission.id}`, {
         title: mission.title,
         description: mission.description,
+        brief: mission.description, // brief alanına da kaydet
         reward_qp: mission.reward_qp,
         published: mission.published,
         is_qappio_of_week: mission.is_qappio_of_week,
@@ -99,9 +105,9 @@ export default function EditMissionPage() {
         sponsor_brand_id: mission.sponsor_brand_id,
         starts_at: mission.starts_at,
         ends_at: mission.ends_at,
-        cover_url: mission.cover_url,
         category: mission.category,
         brand_id: mission.brand_id,
+        cover_url: mission.cover_url, // cover image'i kaydet
       });
       
       toast.success("Görev başarıyla güncellendi");
@@ -182,7 +188,7 @@ export default function EditMissionPage() {
                   Görev Başlığı *
                 </label>
                 <Input
-                  value={mission.title}
+                  value={mission.title || ""}
                   onChange={(e) => setMission({ ...mission, title: e.target.value })}
                   placeholder="Görev başlığını girin"
                 />
@@ -248,7 +254,7 @@ export default function EditMissionPage() {
                 </label>
                 <Input
                   type="number"
-                  value={mission.reward_qp}
+                  value={mission.reward_qp || 0}
                   onChange={(e) => setMission({ ...mission, reward_qp: parseInt(e.target.value) || 0 })}
                   placeholder="0"
                   min="0"

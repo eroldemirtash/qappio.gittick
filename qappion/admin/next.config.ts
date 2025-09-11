@@ -13,5 +13,10 @@ const config: NextConfig = {
     ],
     // unoptimized: true, // gerekirse açılır
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb', // 1MB'den 10MB'ye çıkar
+    },
+  },
 };
 export default config;

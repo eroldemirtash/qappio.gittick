@@ -1,9 +1,10 @@
 import { View, Text, FlatList, RefreshControl, Modal, Pressable, StyleSheet, Image } from 'react-native';
-import { useEffect, useState, useLayoutEffect } from 'react';
+import { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import { useNavigation } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import FeedCard from '@/src/features/missions/components/FeedCard';
 import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '@/src/utils/fonts';
 
 export default function FeedScreen() {
   const navigation = useNavigation();
@@ -14,6 +15,7 @@ export default function FeedScreen() {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'following'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const flatListRef = useRef<FlatList>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: 'Qappio' });
@@ -21,53 +23,108 @@ export default function FeedScreen() {
 
   const fetchPosts = async () => {
     try {
-      // Fetch missions from v_missions_public view (same as mission detail page)
-      const { data: missions, error } = await supabase
-        .from('v_missions_public')
-        .select('*')
-        .eq('published', true)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Convert Supabase data to FeedCard format
-      const formattedPosts = (missions || []).map((mission: any) => ({
-        id: mission.id,
-        media_type: 'image',
-        media_url: mission.cover_url || 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80&fit=crop',
-        caption: mission.description || mission.short_description || 'Görev açıklaması yok',
-        like_count: Math.floor(Math.random() * 100) + 10, // Mock data - gerçek veri için ayrı sorgu gerekir
-        comment_count: Math.floor(Math.random() * 20) + 5, // Mock data - gerçek veri için ayrı sorgu gerekir
-        created_at: mission.created_at,
-        is_sponsored: mission.is_sponsored || false,
-        sponsor_brand: mission.is_sponsored ? {
-          id: 'sponsor-' + mission.id,
-          name: mission.sponsor_brand_name || 'Sponsor',
-          logo_url: mission.sponsor_brand_logo || 'https://via.placeholder.com/30'
-        } : null,
-        user: {
-          id: 'user-' + mission.id,
-          display_name: 'Qappio Kullanıcısı',
-          avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-          level_name: 'Snapper',
-          level_tier: 1
-        },
-        mission: {
-          id: mission.id,
-          title: mission.title,
-          brand: {
-            id: mission.brand_id,
-            name: mission.brand_name || 'Bilinmeyen Marka',
-            logo_url: mission.brand_logo || 'https://via.placeholder.com/50'
+      // Mock data for now since Supabase tables don't exist
+      const mockPosts = [
+        {
+          id: '1',
+          media_type: 'image',
+          media_url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80&fit=crop',
+          caption: 'Yeni koleksiyonumuzu keşfedin! 🎉 #fashion #style',
+          like_count: 42,
+          comment_count: 8,
+          created_at: new Date().toISOString(),
+          is_sponsored: false,
+          sponsor_brand: null,
+          user: {
+            id: 'user-1',
+            display_name: 'Nike',
+            avatar_url: 'https://via.placeholder.com/40',
+            level_name: 'Snapper',
+            level_tier: 1
+          },
+          mission: {
+            id: '1',
+            title: 'Instagram\'da Paylaş',
+            brand: {
+              id: 'brand-1',
+              name: 'Nike',
+              logo_url: 'https://via.placeholder.com/50'
+            }
+          },
+          latest_comment: {
+            username: 'Kullanıcı',
+            text: 'Harika bir görev!'
           }
         },
-        latest_comment: {
-          username: 'Kullanıcı',
-          text: 'Harika bir görev!'
+        {
+          id: '2',
+          media_type: 'image',
+          media_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80&fit=crop',
+          caption: 'Spor yapmak hiç bu kadar eğlenceli olmamıştı! 💪 #fitness #motivation',
+          like_count: 89,
+          comment_count: 15,
+          created_at: new Date(Date.now() - 3600000).toISOString(),
+          is_sponsored: true,
+          sponsor_brand: {
+            id: 'sponsor-2',
+            name: 'Adidas',
+            logo_url: 'https://via.placeholder.com/30'
+          },
+          user: {
+            id: 'user-2',
+            display_name: 'Adidas',
+            avatar_url: 'https://via.placeholder.com/40',
+            level_name: 'Snapper',
+            level_tier: 1
+          },
+          mission: {
+            id: '2',
+            title: 'TikTok Video Çek',
+            brand: {
+              id: 'brand-2',
+              name: 'Adidas',
+              logo_url: 'https://via.placeholder.com/50'
+            }
+          },
+          latest_comment: {
+            username: 'Kullanıcı',
+            text: 'Harika bir görev!'
+          }
+        },
+        {
+          id: '3',
+          media_type: 'image',
+          media_url: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80&fit=crop',
+          caption: 'Doğanın güzelliğini yakaladım 📸 #nature #photography',
+          like_count: 156,
+          comment_count: 23,
+          created_at: new Date(Date.now() - 7200000).toISOString(),
+          is_sponsored: false,
+          sponsor_brand: null,
+          user: {
+            id: 'user-3',
+            display_name: 'Puma',
+            avatar_url: 'https://via.placeholder.com/40',
+            level_name: 'Snapper',
+            level_tier: 1
+          },
+          mission: {
+            id: '3',
+            title: 'Facebook\'ta Beğen',
+            brand: {
+              id: 'brand-3',
+              name: 'Puma',
+              logo_url: 'https://via.placeholder.com/50'
+            }
+          },
+          latest_comment: {
+            username: 'Kullanıcı',
+            text: 'Harika bir görev!'
+          }
         }
-      }));
+      ];
       
-      setPosts(formattedPosts);
+      setPosts(mockPosts);
     } catch (error) {
       console.error('Error fetching posts:', error);
     } finally {
@@ -167,10 +224,20 @@ export default function FeedScreen() {
     <Pressable 
       style={styles.gridItem}
       onPress={() => {
-        if (item.mission?.id) {
-          // Navigate to mission detail
-          console.log('Navigate to mission:', item.mission.id);
-        }
+        // Switch to list view and show selected post
+        setViewMode('list');
+        setSelectedPost(item);
+        // Scroll to the selected post
+        setTimeout(() => {
+          const index = posts.findIndex(post => post.id === item.id);
+          if (index !== -1 && flatListRef.current) {
+            flatListRef.current.scrollToIndex({ 
+              index, 
+              animated: true,
+              viewPosition: 0.5 // Center the item
+            });
+          }
+        }, 200); // Increased timeout to ensure list is rendered
       }}
     >
       <FeedCard 
@@ -228,16 +295,18 @@ export default function FeedScreen() {
 
       {viewMode === 'list' ? (
         <FlatList
+          ref={flatListRef}
           key="list"
           data={posts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <FeedCard
-              post={item}
+            <FeedCard 
+              post={item} 
               onLike={handleLike}
               onComment={handleComment}
               onShare={handleShare}
               onMoreOptions={handleMoreOptions}
+              isSelected={selectedPost?.id === item.id}
             />
           )}
           refreshControl={
@@ -250,6 +319,18 @@ export default function FeedScreen() {
               </Text>
             </View>
           }
+          onScrollToIndexFailed={(info) => {
+            // Fallback if scrollToIndex fails
+            console.log('Scroll to index failed:', info);
+            setTimeout(() => {
+              if (flatListRef.current) {
+                flatListRef.current.scrollToOffset({ 
+                  offset: info.averageItemLength * info.index, 
+                  animated: true 
+                });
+              }
+            }, 100);
+          }}
         />
       ) : (
         <FlatList
@@ -406,6 +487,7 @@ const styles = StyleSheet.create({
   gridBrandName: {
     color: '#ffffff',
     fontSize: 10,
+    fontFamily: fonts.comfortaa.bold,
     fontWeight: '600',
   },
   gridUserInfo: {
@@ -439,6 +521,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: '#111827',
     fontSize: 18,
+    fontFamily: fonts.comfortaa.bold,
     fontWeight: '600',
   },
   closeButton: {

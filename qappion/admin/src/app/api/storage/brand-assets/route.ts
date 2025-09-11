@@ -4,20 +4,27 @@ import { NextRequest } from "next/server";
 export const runtime="nodejs"; export const dynamic="force-dynamic"; export const revalidate=0;
 
 export async function POST(request: NextRequest) {
-  const s = sbAdmin();
-  const formData = await request.formData();
-  const file = formData.get("file") as File;
-  const brandId = formData.get("brandId") as string;
-  const type = formData.get("type") as string; // "avatar" or "cover"
-
-  if (!file || !brandId || !type) {
-    return new Response(JSON.stringify({ error: "Missing required fields" }), { 
-      status: 400,
-      headers: { "content-type": "application/json" }
-    });
-  }
-
   try {
+    const s = sbAdmin();
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+    const brandId = formData.get("brandId") as string;
+    const type = formData.get("type") as string; // "avatar" or "cover"
+
+    console.log('Brand assets upload request:', { 
+      hasFile: !!file, 
+      brandId, 
+      type, 
+      fileName: file?.name,
+      fileSize: file?.size 
+    });
+
+    if (!file || !brandId || !type) {
+      return new Response(JSON.stringify({ error: "Missing required fields" }), { 
+        status: 400,
+        headers: { "content-type": "application/json" }
+      });
+    }
     const fileExt = file.name.split('.').pop();
     const fileName = `${brandId}/${type}.${fileExt}`;
     const filePath = fileName; // Remove duplicate brand-assets prefix
@@ -41,7 +48,11 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { 
+    console.error('Brand assets upload error:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message || 'Upload failed',
+      details: error.toString()
+    }), { 
       status: 500,
       headers: { "content-type": "application/json", "cache-control": "no-store" }
     });

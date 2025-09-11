@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { jget, jpatch, jdelete } from "@/lib/fetcher";
 import { Brand } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -13,12 +13,13 @@ import { Avatar } from "@/components/ui/Avatar";
 import { BrandDetailModal } from "@/components/brands/BrandDetailModal";
 import { Modal } from "@/components/ui/Modal";
 import { Building2, Search, Plus, Target, Share2, Users, RefreshCw, Eye, Edit, Power, Trash2, Grid3X3, List } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function BrandsPage() {
+function BrandsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,20 +36,34 @@ export default function BrandsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await jget<{ items: any[] }>("/api/brands");
+      const response = await jget<{ brands: any[] }>("/api/brands");
       console.log("Brands API Response:", response);
-      console.log("Brands items:", response.items);
-      if (response.items && response.items.length > 0) {
-        console.log("First brand:", response.items[0]);
-        console.log("First brand profiles:", response.items[0].brand_profiles);
+      console.log("Brands items:", response.brands);
+      if (response.brands && response.brands.length > 0) {
+        console.log("First brand:", response.brands[0]);
+        console.log("First brand profiles:", response.brands[0].brand_profiles);
       }
-      // Normalize brand_profiles and logo (snake/camel)
-      const normalized: Brand[] = (response.items || []).map((b: any) => {
-        const profile = Array.isArray(b.brand_profiles) ? b.brand_profiles[0] : b.brand_profiles;
+      // Normalize brand data for UI
+      const normalized: Brand[] = (response.brands || []).map((b: any) => {
+        const profile = b.brand_profiles || {};
         return {
           ...b,
-          logo_url: b.logo_url || b.logoUrl || profile?.logo_url || profile?.avatar_url || null,
-          brand_profiles: profile
+          logo_url: b.logo_url || profile.avatar_url || null,
+          is_active: true,
+          category: profile.category || "Genel",
+          email: profile.email || null,
+          phone: profile.phone || null,
+          website: profile.website || null,
+          brand_profiles: {
+            display_name: profile.display_name || b.name,
+            category: profile.category || "Genel",
+            email: profile.email || null,
+            phone: profile.phone || null,
+            website: profile.website || null,
+            logo_url: b.logo_url || profile.avatar_url || null,
+            avatar_url: profile.avatar_url || b.logo_url || null,
+            license_plan: profile.license_plan || "Basic"
+          }
         };
       });
       setBrands(normalized);
@@ -61,8 +76,70 @@ export default function BrandsPage() {
   };
 
   useEffect(() => {
-    fetchBrands();
-  }, []);
+    fetchBrands().then(() => {
+      // Pull optimistic brand if exists
+      try {
+        const raw = window.localStorage.getItem("lastCreatedBrand");
+        if (raw) {
+          const b = JSON.parse(raw);
+          setBrands(prev => {
+            const exists = prev.some(x => x.id === b.id);
+            return exists ? prev : [b, ...prev];
+          });
+          window.localStorage.removeItem("lastCreatedBrand");
+        }
+        // Merge queued created brands
+        const qRaw = window.localStorage.getItem("createdBrandsQueue");
+        const q = Array.isArray(JSON.parse(qRaw || "null")) ? JSON.parse(qRaw || "[]") : [];
+        if (q.length) {
+          setBrands(prev => {
+            const map = new Map(prev.map(p => [p.id, p]));
+            for (const nb of q) { if (!map.has(nb.id)) { map.set(nb.id, nb); } }
+            return Array.from(map.values());
+          });
+          window.localStorage.removeItem("createdBrandsQueue");
+        }
+        // Highlight and focus created id if present in URL
+        const newId = searchParams.get("newId");
+        if (newId) {
+          // 1) LocalStorage'da detaylı temp brand varsa onu kullan
+          try {
+            const rawOne = window.localStorage.getItem("lastCreatedBrand");
+            const queueRaw = window.localStorage.getItem("createdBrandsQueue");
+            const queue = Array.isArray(JSON.parse(queueRaw || "null")) ? JSON.parse(queueRaw || "[]") : [];
+            const fromQueue = queue.find((q: any) => String(q.id) === String(newId));
+            const fromOne = rawOne ? JSON.parse(rawOne) : null;
+            const candidate = fromQueue || (fromOne && String(fromOne.id) === String(newId) ? fromOne : null);
+            if (candidate) {
+              setBrands(prev => {
+                const exists = prev.some(b => String(b.id) === String(newId));
+                if (exists) return prev;
+                return [candidate as any, ...prev];
+              });
+            } else {
+              // 2) API'den tek marka çek ve listeye ekle
+              jget<{ item: any }>(`/api/brands/${newId}`).then((res) => {
+                if (res?.item) {
+                  setBrands(prev => {
+                    const exists = prev.some(b => String(b.id) === String(newId));
+                    if (exists) return prev;
+                    return [res.item, ...prev];
+                  });
+                }
+              }).catch(() => {});
+            }
+          } catch {}
+
+          // URL'i temizle (newId paramını kaldır)
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("newId");
+            router.replace(url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+          } catch {}
+        }
+      } catch {}
+    });
+  }, [searchParams]);
 
   const handleToggleActive = async (brand: Brand) => {
     try {
@@ -80,8 +157,8 @@ export default function BrandsPage() {
   };
 
   const handleShowDetail = (brand: Brand) => {
-    setSelectedBrand(brand);
-    setIsDetailModalOpen(true);
+    // Yeni detay sayfasına git
+    router.push(`/brands/${brand.id}`);
   };
 
   const handleEdit = (brand: Brand) => {
@@ -263,7 +340,7 @@ export default function BrandsPage() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <Avatar
-                          src={brand.brand_profiles?.logo_url || brand.brand_profiles?.avatar_url}
+                          src={brand.brand_profiles?.avatar_url || brand.brand_profiles?.logo_url || brand.logo_url}
                           fallback={brand.name[0] || "M"}
                           size="lg"
                         />
@@ -287,30 +364,30 @@ export default function BrandsPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-500">Kategori:</span>
                         <span className="badge bg-brand-100 text-brand-700">
-                          {brand.brand_profiles?.category || brand.category || "Genel"}
+                          {brand.category || brand.brand_profiles?.category || "Genel"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-500">E-posta:</span>
-                        <span className="text-sm font-medium">{brand.brand_profiles?.email || brand.email || "N/A"}</span>
+                        <span className="text-sm font-medium">{brand.email || brand.brand_profiles?.email || "N/A"}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-500">Telefon:</span>
-                        <span className="text-sm font-medium">{brand.brand_profiles?.phone || brand.phone || "N/A"}</span>
+                        <span className="text-sm font-medium">{brand.phone || brand.brand_profiles?.phone || "N/A"}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-500">Website:</span>
                         <span className="text-sm font-medium">
-                          {(brand.brand_profiles?.website || brand.website) ? (
+                          {(brand.website || brand.brand_profiles?.website) ? (
                             <a 
-                              href={(brand.brand_profiles?.website || brand.website)?.startsWith('http') 
-                                ? (brand.brand_profiles?.website || brand.website)
-                                : `https://${brand.brand_profiles?.website || brand.website}`} 
+                              href={(brand.website || brand.brand_profiles?.website)?.startsWith('http') 
+                                ? (brand.website || brand.brand_profiles?.website)
+                                : `https://${brand.website || brand.brand_profiles?.website}`} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline"
                             >
-                              {(brand.brand_profiles?.website || brand.website)?.replace(/^https?:\/\//, '')}
+                              {(brand.website || brand.brand_profiles?.website)?.replace(/^https?:\/\//, '')}
                             </a>
                           ) : "N/A"}
                         </span>
@@ -394,7 +471,7 @@ export default function BrandsPage() {
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
                               <Avatar
-                                src={brand.brand_profiles?.logo_url || brand.brand_profiles?.avatar_url}
+                                src={brand.brand_profiles?.avatar_url || brand.brand_profiles?.logo_url || brand.logo_url}
                                 fallback={brand.name[0] || "M"}
                                 size="sm"
                               />
@@ -549,5 +626,13 @@ export default function BrandsPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function BrandsPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <BrandsPageContent />
+    </Suspense>
   );
 }

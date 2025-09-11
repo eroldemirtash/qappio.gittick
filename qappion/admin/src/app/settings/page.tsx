@@ -26,10 +26,19 @@ export default function SettingsPage() {
     },
     login: {
       logo_url: "",
+      cover_image_url: "",
+      background_type: "gradient", // "image" or "gradient"
+      gradient_colors: {
+        start: "#2da2ff",
+        middle: "#1b8ae6",
+        end: "#0d6efd"
+      },
+      slogan: "Qappish'le...",
       show_facebook: true,
       show_google: true,
       show_apple: false,
       show_phone: true,
+      show_manual_signup: true,
       terms_url: "",
       privacy_url: "",
       custom_css: ""
@@ -37,6 +46,8 @@ export default function SettingsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -81,17 +92,77 @@ export default function SettingsPage() {
   };
 
   const handleLoginUpdate = async (loginData: any) => {
+    setSaving(true);
     try {
-      await jpatch("/api/settings", {
+      const updatedLoginSettings = { ...(settings.login || {}), ...loginData };
+      console.log("Sending login settings to API:", updatedLoginSettings);
+      
+      const response = await jpatch("/api/settings", {
         key: "login",
-        value: { ...(settings.login || {}), ...loginData }
+        value: updatedLoginSettings
       });
+      
+      console.log("API response:", response);
+      
       setSettings(prev => ({
         ...prev,
-        login: { ...(prev.login || {}), ...loginData }
+        login: updatedLoginSettings
       }));
-    } catch (err) {
+      
+      alert("Ayarlar başarıyla kaydedildi!");
+    } catch (err: any) {
       console.error("Failed to update login settings:", err);
+      alert(`Ayarlar kaydedilirken hata oluştu: ${err.message || 'Bilinmeyen hata'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLoginFieldChange = (fieldData: any) => {
+    // Sadece state'i güncelle, API'ye kaydetme
+    setSettings(prev => ({
+      ...prev,
+      login: {
+        ...prev.login,
+        ...fieldData
+      }
+    }));
+  };
+
+  const handleImageUpload = async (file: File, type: 'logo' | 'cover') => {
+    setUploading(type);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'login-assets');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const { url } = await response.json();
+      
+      const fieldName = type === 'logo' ? 'logo_url' : 'cover_image_url';
+      
+      // Sadece state'i güncelle, API'ye kaydetme
+      setSettings(prev => ({
+        ...prev,
+        login: {
+          ...prev.login,
+          [fieldName]: url
+        }
+      }));
+      
+    } catch (err) {
+      console.error('Image upload failed:', err);
+      alert('Resim yüklenirken hata oluştu');
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -300,22 +371,228 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                   <h3 className="text-lg font-semibold">Giriş Sayfası Ayarları</h3>
                   
-                  {/* Logo Ayarları */}
+                  {/* Logo ve Slogan Ayarları */}
                   <div className="space-y-4">
-                    <h4 className="font-medium text-slate-900">Logo Ayarları</h4>
+                    <h4 className="font-medium text-slate-900">Logo ve Slogan Ayarları</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Logo URL
+                        </label>
+                        <Input
+                          placeholder="https://example.com/logo.png"
+                          value={settings.login?.logo_url || ""}
+                          onChange={(e) => handleLoginFieldChange({ logo_url: e.target.value })}
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Giriş sayfasında görünecek logo URL'si
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Logo Yükle
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file, 'logo');
+                          }}
+                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
+                          disabled={uploading === 'logo'}
+                        />
+                        {uploading === 'logo' && (
+                          <p className="text-xs text-blue-600 mt-1">Yükleniyor...</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Slogan Alanı */}
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Logo URL
+                        Slogan
                       </label>
                       <Input
-                        placeholder="https://example.com/logo.png"
-                        value={settings.login?.logo_url || ""}
-                        onChange={(e) => handleLoginUpdate({ logo_url: e.target.value })}
+                        placeholder="Qappish'le..."
+                        value={settings.login?.slogan || ""}
+                        onChange={(e) => handleLoginFieldChange({ slogan: e.target.value })}
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        Giriş sayfasında görünecek logo URL'si
+                        Logo altında görünecek slogan metni
                       </p>
                     </div>
+
+                    {settings.login?.logo_url && (
+                      <div className="mt-4">
+                        <h5 className="text-sm font-medium text-slate-700 mb-2">Logo Ön İzleme</h5>
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                          <img
+                            src={settings.login.logo_url}
+                            alt="Logo Preview"
+                            className="h-16 w-auto object-contain mx-auto"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Arka Plan Ayarları */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-slate-900">Arka Plan Ayarları</h4>
+                    
+                    {/* Arka Plan Tipi Seçimi */}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-slate-700">Arka Plan Tipi</label>
+                      <div className="flex space-x-4">
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="background_type"
+                            value="gradient"
+                            checked={settings.login?.background_type === "gradient"}
+                            onChange={(e) => handleLoginFieldChange({ background_type: e.target.value })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">Gradyan Renk</span>
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="background_type"
+                            value="image"
+                            checked={settings.login?.background_type === "image"}
+                            onChange={(e) => handleLoginFieldChange({ background_type: e.target.value })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">Kapak Resmi</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Gradyan Renk Seçimi */}
+                    {settings.login?.background_type === "gradient" && (
+                      <div className="space-y-4">
+                        <h5 className="text-sm font-medium text-slate-700">Gradyan Renkleri</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Başlangıç Rengi
+                            </label>
+                            <Input
+                              type="color"
+                              value={settings.login?.gradient_colors?.start || "#2da2ff"}
+                              onChange={(e) => handleLoginFieldChange({ 
+                                gradient_colors: { 
+                                  ...settings.login?.gradient_colors, 
+                                  start: e.target.value 
+                                }
+                              })}
+                              className="h-10"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Orta Renk
+                            </label>
+                            <Input
+                              type="color"
+                              value={settings.login?.gradient_colors?.middle || "#1b8ae6"}
+                              onChange={(e) => handleLoginFieldChange({ 
+                                gradient_colors: { 
+                                  ...settings.login?.gradient_colors, 
+                                  middle: e.target.value 
+                                }
+                              })}
+                              className="h-10"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Bitiş Rengi
+                            </label>
+                            <Input
+                              type="color"
+                              value={settings.login?.gradient_colors?.end || "#0d6efd"}
+                              onChange={(e) => handleLoginFieldChange({ 
+                                gradient_colors: { 
+                                  ...settings.login?.gradient_colors, 
+                                  end: e.target.value 
+                                }
+                              })}
+                              className="h-10"
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <h6 className="text-sm font-medium text-slate-700 mb-2">Gradyan Ön İzleme</h6>
+                          <div 
+                            className="h-16 w-full rounded-lg"
+                            style={{
+                              background: `linear-gradient(135deg, ${settings.login?.gradient_colors?.start || "#2da2ff"}, ${settings.login?.gradient_colors?.middle || "#1b8ae6"}, ${settings.login?.gradient_colors?.end || "#0d6efd"})`
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Kapak Resmi Seçimi */}
+                    {settings.login?.background_type === "image" && (
+                      <div className="space-y-4">
+                        <h5 className="text-sm font-medium text-slate-700">Kapak Resmi</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Kapak Resmi URL
+                            </label>
+                            <Input
+                              placeholder="https://example.com/cover.jpg"
+                              value={settings.login?.cover_image_url || ""}
+                              onChange={(e) => handleLoginFieldChange({ cover_image_url: e.target.value })}
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Giriş sayfasında arka plan olarak görünecek resim
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Kapak Resmi Yükle
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleImageUpload(file, 'cover');
+                              }}
+                              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
+                              disabled={uploading === 'cover'}
+                            />
+                            {uploading === 'cover' && (
+                              <p className="text-xs text-blue-600 mt-1">Yükleniyor...</p>
+                            )}
+                          </div>
+                        </div>
+                        {settings.login?.cover_image_url && (
+                          <div className="mt-4">
+                            <h6 className="text-sm font-medium text-slate-700 mb-2">Kapak Resmi Ön İzleme</h6>
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                              <img 
+                                src={settings.login.cover_image_url} 
+                                alt="Cover Preview" 
+                                className="h-32 w-full object-cover rounded"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Sosyal Medya Giriş Seçenekleri */}
@@ -329,7 +606,7 @@ export default function SettingsPage() {
                         </div>
                         <Switch
                           checked={settings.login?.show_facebook || false}
-                          onCheckedChange={(checked) => handleLoginUpdate({ show_facebook: checked })}
+                          onCheckedChange={(checked) => handleLoginFieldChange({ show_facebook: checked })}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -339,7 +616,7 @@ export default function SettingsPage() {
                         </div>
                         <Switch
                           checked={settings.login?.show_google || false}
-                          onCheckedChange={(checked) => handleLoginUpdate({ show_google: checked })}
+                          onCheckedChange={(checked) => handleLoginFieldChange({ show_google: checked })}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -349,7 +626,7 @@ export default function SettingsPage() {
                         </div>
                         <Switch
                           checked={settings.login?.show_apple || false}
-                          onCheckedChange={(checked) => handleLoginUpdate({ show_apple: checked })}
+                          onCheckedChange={(checked) => handleLoginFieldChange({ show_apple: checked })}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -359,7 +636,17 @@ export default function SettingsPage() {
                         </div>
                         <Switch
                           checked={settings.login?.show_phone || false}
-                          onCheckedChange={(checked) => handleLoginUpdate({ show_phone: checked })}
+                          onCheckedChange={(checked) => handleLoginFieldChange({ show_phone: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Manuel Kayıt</p>
+                          <p className="text-sm text-slate-500">Email ve şifre ile kayıt olma</p>
+                        </div>
+                        <Switch
+                          checked={settings.login?.show_manual_signup || false}
+                          onCheckedChange={(checked) => handleLoginFieldChange({ show_manual_signup: checked })}
                         />
                       </div>
                     </div>
@@ -376,7 +663,7 @@ export default function SettingsPage() {
                         <Input
                           placeholder="https://example.com/terms"
                           value={settings.login?.terms_url || ""}
-                          onChange={(e) => handleLoginUpdate({ terms_url: e.target.value })}
+                          onChange={(e) => handleLoginFieldChange({ terms_url: e.target.value })}
                         />
                       </div>
                       <div>
@@ -386,7 +673,7 @@ export default function SettingsPage() {
                         <Input
                           placeholder="https://example.com/privacy"
                           value={settings.login?.privacy_url || ""}
-                          onChange={(e) => handleLoginUpdate({ privacy_url: e.target.value })}
+                          onChange={(e) => handleLoginFieldChange({ privacy_url: e.target.value })}
                         />
                       </div>
                     </div>
@@ -403,7 +690,7 @@ export default function SettingsPage() {
                         className="w-full h-32 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                         placeholder="/* Özel CSS kodları */"
                         value={settings.login?.custom_css || ""}
-                        onChange={(e) => handleLoginUpdate({ custom_css: e.target.value })}
+                        onChange={(e) => handleLoginFieldChange({ custom_css: e.target.value })}
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         Giriş sayfasına özel CSS stilleri ekleyin
@@ -415,8 +702,10 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <h4 className="font-medium text-slate-900">Önizleme</h4>
                     <div className="p-4 border border-slate-200 rounded-lg bg-slate-50">
-                      <div className="text-sm text-slate-600">
+                      <div className="text-sm text-slate-600 space-y-2">
                         <p>• Logo: {settings.login?.logo_url ? "✅ Ayarlanmış" : "❌ Ayarlanmamış"}</p>
+                        <p>• Kapak Resmi: {settings.login?.cover_image_url ? "✅ Ayarlanmış" : "❌ Ayarlanmamış"}</p>
+                        <p>• Manuel Kayıt: {settings.login?.show_manual_signup ? "✅ Aktif" : "❌ Pasif"}</p>
                         <p>• Facebook: {settings.login?.show_facebook ? "✅ Aktif" : "❌ Pasif"}</p>
                         <p>• Google: {settings.login?.show_google ? "✅ Aktif" : "❌ Pasif"}</p>
                         <p>• Apple: {settings.login?.show_apple ? "✅ Aktif" : "❌ Pasif"}</p>
@@ -425,6 +714,20 @@ export default function SettingsPage() {
                         <p>• Gizlilik: {settings.login?.privacy_url ? "✅ Ayarlanmış" : "❌ Ayarlanmamış"}</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Kaydet Butonu */}
+                  <div className="flex justify-end pt-6 border-t border-slate-200">
+                    <Button 
+                      onClick={() => {
+                        console.log("Saving login settings:", settings.login);
+                        handleLoginUpdate(settings.login || {});
+                      }}
+                      className="px-8"
+                      disabled={saving}
+                    >
+                      {saving ? "Kaydediliyor..." : "Ayarları Kaydet"}
+                    </Button>
                   </div>
                 </div>
               )}

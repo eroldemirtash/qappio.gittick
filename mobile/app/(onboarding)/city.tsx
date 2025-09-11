@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/src/store/useAuth';
+// Auth imports geçici olarak devre dışı
 
 const CITIES = [
   'İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana',
@@ -11,17 +11,11 @@ const CITIES = [
 export default function CityScreen() {
   const [selectedCity, setSelectedCity] = useState<string>('');
   const router = useRouter();
-  const { updateProfile } = useAuth();
+  // Auth geçici olarak devre dışı
 
-  const handleContinue = async () => {
-    if (!selectedCity) return;
-    
-    try {
-      await updateProfile({ city: selectedCity });
-      router.push('/(onboarding)/location-permission');
-    } catch (error) {
-      console.error('City update error:', error);
-    }
+  const handleContinue = () => {
+    // Direkt ana uygulamaya yönlendir
+    router.replace('/(tabs)');
   };
 
   return (
@@ -54,14 +48,11 @@ export default function CityScreen() {
       </ScrollView>
 
       <Pressable
-        className={`py-4 rounded-xl ${
-          selectedCity ? 'bg-primary' : 'bg-sub'
-        }`}
+        className="py-4 rounded-xl bg-primary"
         onPress={handleContinue}
-        disabled={!selectedCity}
       >
         <Text className="text-center text-white font-semibold text-base">
-          Devam Et
+          Ana Uygulamaya Git
         </Text>
       </Pressable>
     </View>

@@ -36,24 +36,25 @@ export default function MissionsPage() {
   useEffect(() => {
     const fetchMissions = async () => {
       try {
+        console.log("Fetching missions...");
         const response = await jget<{ items: any[] }>("/api/missions");
-        // Normalize fields for UI and extract brand info
+        console.log("Missions response:", response);
+        
+        // Simple mapping without complex brand logic
         const mappedMissions = (response.items || []).map(mission => ({
           ...mission,
-          reward_qp: mission.qp_reward ?? mission.reward_qp ?? mission.reward_points ?? 0,
-          published: mission.is_published ?? mission.published ?? false,
-          brand: mission.brands ? {
-            id: mission.brands.id,
-            name: mission.brands.name,
-            logo_url: mission.brands.brand_profiles?.logo_url,
-            display_name: mission.brands.brand_profiles?.display_name,
-            category: mission.brands.brand_profiles?.category
-          } : null
+          reward_qp: mission.reward_qp ?? 0,
+          published: mission.published ?? false,
+          brand: mission.brand || null
         }));
+        
+        console.log("Mapped missions:", mappedMissions);
         setMissions(mappedMissions);
+        console.log("Missions set successfully");
+        setLoading(false);
       } catch (err) {
+        console.error("Missions fetch error:", err);
         setError(err instanceof Error ? err.message : "Bilinmeyen hata");
-      } finally {
         setLoading(false);
       }
     };
@@ -161,13 +162,10 @@ export default function MissionsPage() {
     return (
       <div className="page">
         <PageHeader title="Görev Yönetimi" description="Tüm görevleri yönetin" />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="card p-6 animate-pulse">
-              <div className="h-4 bg-slate-200 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-slate-200 rounded w-1/3 mb-2"></div>
-            </div>
-          ))}
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-slate-600">Görevler yükleniyor...</p>
+          <p className="mt-2 text-xs text-slate-400">Loading state: {loading ? 'true' : 'false'}</p>
         </div>
       </div>
     );

@@ -1,106 +1,91 @@
+import { NextRequest, NextResponse } from "next/server";
 import { sbAdmin } from "@/lib/supabase-admin";
-import { NextRequest } from "next/server";
-
-export const runtime="nodejs"; export const dynamic="force-dynamic"; export const revalidate=0;
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
-      return new Response(JSON.stringify({ 
-        error: "Supabase yapılandırması eksik. Demo modda tek market öğesi görüntülenemez." 
-      }), { 
-        status: 400,
-        headers: { "content-type": "application/json", "cache-control": "no-store" }
-      });
-    }
-
-    const s = sbAdmin();
     const { id } = await params;
-
-    const { data, error } = await s
-      .from('market')
+    console.log('🔍 Product detail API called with id:', id);
+    
+    const { data, error } = await sbAdmin()
+      .from("products")
       .select(`
-        *,
-        brand:brands(*),
-        category:categories(*)
+        id, title, description, value_qp, stock_count, stock_status, brand_id, is_active, created_at, category, level, usage_terms,
+        brands ( 
+          id, name, logo_url,
+          brand_profiles ( website, email, avatar_url )
+        ),
+        product_images ( url, position ),
+        product_marketplaces ( marketplace, url )
       `)
-      .eq('id', id)
+      .eq("id", id)
       .single();
 
+    console.log('🔍 Supabase response:', { data, error });
+
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { 
-        status: 404,
-        headers: { "content-type": "application/json", "cache-control": "no-store" }
-      });
+      console.error("Supabase product detail error:", error);
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    return new Response(JSON.stringify(data), { 
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), { 
-      status: 500,
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
-  }
-}
+    if (!data) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Get cover image from product_images (first image by position)
+    const coverImage = data.product_images && data.product_images.length > 0 
+      ? data.product_images.sort((a: any, b: any) => (a.position || 0) - (b.position || 0))[0]?.url
+      : null;
+
+    // Get all images sorted by position
+    const galleryImages = data.product_images && data.product_images.length > 0
+      ? data.product_images.sort((a: any, b: any) => (a.position || 0) - (b.position || 0)).map((img: any) => img.url)
+      : [];
+
+    // Transform marketplace links
+    const marketplaceLinks = data.product_marketplaces && data.product_marketplaces.length > 0
+      ? data.product_marketplaces.map((mp: any, index: number) => ({
+          id: index + 1,
+          marketplace: mp.marketplace || 'Marketplace',
+          product_url: mp.url || '#',
+          image_url: '' // Will be resolved by og-image API
+        }))
+      : [];
+
+    const brand = Array.isArray(data.brands) && data.brands.length > 0 ? data.brands[0] : null;
+    const brandProfile = brand?.brand_profiles?.[0] || null;
     
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
-      return new Response(JSON.stringify({ 
-        message: "Demo mode: Market item updated (not persisted)" 
-      }), { 
-        headers: { "content-type": "application/json", "cache-control": "no-store" }
-      });
-    }
+    const item = {
+      id: data.id,
+      name: data.title || 'Ürün Adı Yok',
+      brandName: brand?.name || 'Bilinmeyen Marka',
+      brandLogo: brand?.logo_url,
+      brandCover: brandProfile?.avatar_url || brand?.logo_url, // Use avatar_url if available
+      brandWebsite: brandProfile?.website || '',
+      brandEmail: brandProfile?.email || '',
+      brandSocials: {}, // Not available in current schema
+      stock: data.stock_count || 0,
+      price: data.value_qp || 0,
+      level: data.level || 1,
+      category: data.category || 'Elektronik',
+      image: coverImage || 'https://via.placeholder.com/400x400?text=No+Image',
+      images: galleryImages.length > 0 ? galleryImages : [coverImage || 'https://via.placeholder.com/400x400?text=No+Image'],
+      description: data.description || '',
+      features: [], // TODO: Add features field to products table
+      marketplace_links: marketplaceLinks,
+      product_images: data.product_images || [],
+      brand: data.brands,
+      usage_terms: data.usage_terms || '',
+      is_active: data.is_active,
+      created_at: data.created_at,
+    };
 
-    const s = sbAdmin();
-    const { id } = await params;
-    const body = await request.json();
-
-    const { data, error } = await s
-      .from('market')
-      .update({
-        name: body.name,
-        description: body.description,
-        price: body.price,
-        category_id: body.category_id,
-        brand_id: body.brand_id,
-        is_active: body.is_active,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { 
-        status: 400,
-        headers: { "content-type": "application/json", "cache-control": "no-store" }
-      });
-    }
-
-    return new Response(JSON.stringify(data), { 
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), { 
-      status: 500,
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
+    return NextResponse.json({ item });
+  } catch (error: any) {
+    console.error("API error:", error?.message || error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -109,39 +94,54 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
-      return new Response(JSON.stringify({ 
-        message: "Demo mode: Market item deleted (not persisted)" 
-      }), { 
-        headers: { "content-type": "application/json", "cache-control": "no-store" }
-      });
-    }
-
-    const s = sbAdmin();
     const { id } = await params;
-
-    const { error } = await s
-      .from('market')
+    console.log('🗑️ Delete product API called with id:', id);
+    
+    // Delete product images first
+    const { error: imagesError } = await sbAdmin()
+      .from('product_images')
+      .delete()
+      .eq('product_id', id);
+    
+    if (imagesError) {
+      console.error('Error deleting product images:', imagesError);
+    }
+    
+    // Delete product levels
+    const { error: levelsError } = await sbAdmin()
+      .from('product_levels')
+      .delete()
+      .eq('product_id', id);
+    
+    if (levelsError) {
+      console.error('Error deleting product levels:', levelsError);
+    }
+    
+    // Delete product marketplaces
+    const { error: marketplacesError } = await sbAdmin()
+      .from('product_marketplaces')
+      .delete()
+      .eq('product_id', id);
+    
+    if (marketplacesError) {
+      console.error('Error deleting product marketplaces:', marketplacesError);
+    }
+    
+    // Delete the product
+    const { error: productError } = await sbAdmin()
+      .from('products')
       .delete()
       .eq('id', id);
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { 
-        status: 400,
-        headers: { "content-type": "application/json", "cache-control": "no-store" }
-      });
+    
+    if (productError) {
+      console.error('Error deleting product:', productError);
+      return NextResponse.json({ error: "Failed to delete product" }, { status: 500 });
     }
-
-    return new Response(JSON.stringify({ message: "Market item deleted successfully" }), { 
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), { 
-      status: 500,
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
+    
+    console.log('✅ Product deleted successfully:', id);
+    return NextResponse.json({ success: true, message: "Product deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete API error:", error?.message || error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -20,7 +20,24 @@ export async function GET() {
     const s = sbAdmin();
     const { data, error } = await s
       .from("profiles")
-      .select("id, full_name, username, role, avatar_url, created_at")
+      .select(`
+        id, 
+        full_name, 
+        username, 
+        role, 
+        avatar_url, 
+        created_at,
+        bio,
+        email,
+        phone,
+        address,
+        gender,
+        socials,
+        total_qp,
+        spendable_qp,
+        total_missions,
+        completed_missions
+      `)
       .order("created_at", { ascending: false });
 
     if (error) {

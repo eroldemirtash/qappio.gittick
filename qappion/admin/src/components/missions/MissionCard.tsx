@@ -53,26 +53,41 @@ export function MissionCard({
     return `${minutes}dk`;
   };
 
-  const timeRemaining = formatTimeRemaining(mission.ends_at);
+  const timeRemaining = formatTimeRemaining(mission.ends_at || mission.deadline);
 
   // Debug: API'den gelen veriyi kontrol et
   console.log('MissionCard - mission data:', {
     id: mission.id,
     title: mission.title,
+    reward_qp: mission.reward_qp,
+    qp_reward: mission.qp_reward,
+    reward_points: mission.reward_points,
+    description: mission.description,
+    starts_at: mission.starts_at,
+    ends_at: mission.ends_at,
+    deadline: mission.deadline,
+    cover_url: mission.cover_url,
+    cover_image: mission.cover_image,
     brand: mission.brand,
-    is_sponsored: mission.is_sponsored,
-    sponsor_brand: mission.sponsor_brand
+    brandName: mission.brandName,
+    brandLogo: mission.brandLogo,
+    sponsor_brand: mission.sponsor_brand,
+    has_sponsor: !!mission.sponsor_brand
   });
 
   return (
     <div className="card p-6 hover:shadow-lg transition-shadow">
       {/* Cover Image */}
-      {mission.cover_url && (
+      {(mission.cover_url || mission.cover_image) && (
         <div className="relative mb-4">
           <img 
-            src={mission.cover_url} 
+            src={mission.cover_url || mission.cover_image} 
             alt={mission.title}
             className="w-full h-48 object-cover rounded-xl"
+            onError={(e) => {
+              console.log('❌ Cover image failed to load:', mission.cover_url || mission.cover_image);
+              (e.currentTarget as HTMLElement).style.display = 'none';
+            }}
           />
           {mission.is_qappio_of_week && (
             <div className="absolute top-3 right-3">
@@ -82,13 +97,13 @@ export function MissionCard({
               </div>
             </div>
           )}
-          {mission.is_sponsored && mission.sponsor_brand && (
-            <div className="absolute top-3 left-3">
+          {mission.sponsor_brand && (
+            <div className="absolute bottom-3 right-3">
               <div className="flex items-center gap-1 bg-purple-500 text-white px-2 py-1 rounded-full text-xs font-medium">
                 <span>Sponsored by</span>
-                {mission.sponsor_brand.brand_profiles?.logo_url && (
+                {mission.sponsor_brand.logo_url && (
                   <img
-                    src={mission.sponsor_brand.brand_profiles.logo_url}
+                    src={mission.sponsor_brand.logo_url}
                     alt={mission.sponsor_brand.name}
                     className="h-3 w-3 rounded-full"
                   />
@@ -104,20 +119,20 @@ export function MissionCard({
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <Avatar
-            src={mission.brand?.brand_profiles?.logo_url}
-            fallback={mission.brand?.name?.[0] || "M"}
+            src={mission.brandLogo || mission.brand?.brand_profiles?.avatar_url}
+            fallback={(mission.brandName || mission.brand?.name)?.[0] || "M"}
             size="md"
           />
           <div>
             <h3 className="font-semibold text-slate-900 line-clamp-1">{mission.title}</h3>
-            <p className="text-sm text-slate-500">{mission.brand?.name}</p>
+            <p className="text-sm text-slate-500">{mission.brandName || mission.brand?.name || 'Bilinmeyen Marka'}</p>
             {/* Sponsor bilgisi */}
-            {mission.is_sponsored && mission.sponsor_brand && (
+            {mission.sponsor_brand && (
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-xs text-red-500 font-medium">Sponsored by</span>
-                {mission.sponsor_brand.brand_profiles?.logo_url && (
+                {mission.sponsor_brand.logo_url && (
                   <img
-                    src={mission.sponsor_brand.brand_profiles.logo_url}
+                    src={mission.sponsor_brand.logo_url}
                     alt={mission.sponsor_brand.name}
                     className="h-3 w-3 rounded-full"
                   />

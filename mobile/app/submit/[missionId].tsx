@@ -1,34 +1,35 @@
-import { useState, useEffect } from 'react';
-import { View, Text, Pressable, TextInput, Image, Alert } from 'react-native';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  Pressable, 
+  TextInput, 
+  Image, 
+  Alert, 
+  StyleSheet, 
+  ScrollView, 
+  Switch,
+  Dimensions,
+  SafeAreaView
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/src/lib/supabase';
-import { MissionDetail } from '@/src/features/missions/types';
-import { isInsideRadius } from '@/src/utils/geo';
-import { useUI } from '@/src/store/useUI';
-import { z } from 'zod';
 
-const submitSchema = z.object({
-  caption: z.string().min(1, 'Açıklama gerekli'),
-});
-
-type SubmitForm = z.infer<typeof submitSchema>;
+const { width } = Dimensions.get('window');
 
 export default function SubmitScreen() {
   const { missionId } = useLocalSearchParams<{ missionId: string }>();
   const router = useRouter();
-  const [mission, setMission] = useState<MissionDetail | null>(null);
+  const [mission, setMission] = useState<any>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+  const [facebookShare, setFacebookShare] = useState(true);
+  const [twitterShare, setTwitterShare] = useState(true);
+  const [commentsEnabled, setCommentsEnabled] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const { showToast } = useUI();
-
-  const { control, handleSubmit, formState: { errors } } = useForm<SubmitForm>({
-    resolver: zodResolver(submitSchema),
-  });
 
   useEffect(() => {
     if (missionId) {
@@ -41,8 +42,10 @@ export default function SubmitScreen() {
       const { data, error } = await supabase
         .from('missions')
         .select(`
-          id, title, description, reward_qp, deadline, location_lat, location_lng, location_radius, status,
-          brand:brands ( id, name, logo_url )
+          id, title, description, reward_qp, cover_url,
+          brands!missions_brand_id_fkey (
+            id, name, brand_profiles (logo_url)
+          )
         `)
         .eq('id', missionId)
         .single();
@@ -51,7 +54,7 @@ export default function SubmitScreen() {
       setMission(data);
     } catch (error) {
       console.error('Mission fetch error:', error);
-      showToast('Görev yüklenemedi', 'error');
+      Alert.alert('Hata', 'Görev yüklenemedi');
     }
   };
 
@@ -75,7 +78,7 @@ export default function SubmitScreen() {
       }
     } catch (error) {
       console.error('Image picker error:', error);
-      showToast('Resim seçilemedi', 'error');
+      Alert.alert('Hata', 'Resim seçilemedi');
     }
   };
 
@@ -98,47 +101,7 @@ export default function SubmitScreen() {
       }
     } catch (error) {
       console.error('Camera error:', error);
-      showToast('Fotoğraf çekilemedi', 'error');
-    }
-  };
-
-  const checkLocation = async (): Promise<boolean> => {
-    if (!mission?.location_lat || !mission?.location_lng || !mission?.location_radius) {
-      return true; // No location requirement
-    }
-
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Konum İzni', 'Bu görev için konum izni gerekli');
-        return false;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      const userLat = location.coords.latitude;
-      const userLng = location.coords.longitude;
-
-      const isInside = isInsideRadius(
-        userLat,
-        userLng,
-        mission.location_lat,
-        mission.location_lng,
-        mission.location_radius
-      );
-
-      if (!isInside) {
-        Alert.alert(
-          'Lokasyon Hatası',
-          'Görev lokasyonuna yeterince yakın değilsiniz'
-        );
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Location check error:', error);
-      showToast('Konum kontrol edilemedi', 'error');
-      return false;
+      Alert.alert('Hata', 'Fotoğraf çekilemedi');
     }
   };
 
@@ -157,14 +120,16 @@ export default function SubmitScreen() {
     return data.path;
   };
 
-  const onSubmit = async (data: SubmitForm) => {
+  const handleSubmit = async () => {
     if (!selectedImage) {
-      showToast('Lütfen bir resim seçin', 'error');
+      Alert.alert('Uyarı', 'Lütfen bir fotoğraf seçin');
       return;
     }
 
-    const locationOk = await checkLocation();
-    if (!locationOk) return;
+    if (!description.trim()) {
+      Alert.alert('Uyarı', 'Lütfen bir açıklama yazın');
+      return;
+    }
 
     setUploading(true);
 
@@ -172,23 +137,32 @@ export default function SubmitScreen() {
       // Upload image
       const imagePath = await uploadImage(selectedImage);
 
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Hata', 'Kullanıcı giriş yapmamış');
+        return;
+      }
+
       // Create submission
       const { error } = await supabase
         .from('submissions')
         .insert({
           mission_id: missionId,
-          media_url: imagePath,
-          caption: data.caption,
-          status: 'pending',
+          user_id: user.id,
+          media: [{ path: imagePath, type: 'image' }],
+          note: description,
+          status: 'review',
         });
 
       if (error) throw error;
 
-      showToast('Görev başarıyla yüklendi!', 'success');
-      router.back();
+      Alert.alert('Başarılı', 'Göreviniz başarıyla gönderildi!', [
+        { text: 'Tamam', onPress: () => router.back() }
+      ]);
     } catch (error) {
       console.error('Submission error:', error);
-      showToast('Görev yüklenemedi', 'error');
+      Alert.alert('Hata', 'Görev gönderilemedi');
     } finally {
       setUploading(false);
     }
@@ -196,89 +170,277 @@ export default function SubmitScreen() {
 
   if (!mission) {
     return (
-      <View className="flex-1 bg-bg justify-center items-center">
-        <Text className="text-text">Yükleniyor...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Yükleniyor...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View className="flex-1 bg-bg px-6">
-      <View className="pt-6 pb-4">
-        <Text className="text-2xl font-bold text-text mb-2">{mission.title}</Text>
-        <Text className="text-sub">Görevini tamamla ve {mission.reward_qp} QP kazan</Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
 
-      {/* Image Selection */}
-      <View className="mb-6">
-        <Text className="text-text font-semibold mb-3">Görev Fotoğrafı</Text>
-        
-        {selectedImage ? (
-          <View className="relative">
-            <Image source={{ uri: selectedImage }} className="w-full h-64 rounded-xl" />
-            <Pressable
-              className="absolute top-2 right-2 bg-black/50 rounded-full p-2"
-              onPress={() => setSelectedImage(null)}
-            >
-              <Ionicons name="close" size={20} color="white" />
-            </Pressable>
-          </View>
-        ) : (
-          <View className="flex-row gap-3">
-            <Pressable
-              className="flex-1 bg-card border border-border rounded-xl p-4 items-center"
-              onPress={pickImage}
-            >
-              <Ionicons name="image-outline" size={32} color="#94a3b8" />
-              <Text className="text-text font-semibold mt-2">Galeri</Text>
-            </Pressable>
-            
-            <Pressable
-              className="flex-1 bg-card border border-border rounded-xl p-4 items-center"
-              onPress={takePhoto}
-            >
-              <Ionicons name="camera-outline" size={32} color="#94a3b8" />
-              <Text className="text-text font-semibold mt-2">Kamera</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-
-      {/* Caption */}
-      <View className="mb-6">
-        <Text className="text-text font-semibold mb-3">Açıklama</Text>
-        <Controller
-          control={control}
-          name="caption"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="bg-card border border-border rounded-xl px-4 py-3 text-text text-base"
-              placeholder="Görevin hakkında bir açıklama yaz..."
-              placeholderTextColor="#94a3b8"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
+        {/* Photo Upload Section */}
+        <View style={styles.photoSection}>
+          {selectedImage ? (
+            <View style={styles.selectedImageContainer}>
+              <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+              <Pressable 
+                style={styles.removeImageButton}
+                onPress={() => setSelectedImage(null)}
+              >
+                <Ionicons name="close" size={20} color="#ffffff" />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Ionicons name="image-outline" size={80} color="#d1d5db" />
+              <Text style={styles.photoPlaceholderText}>Fotoğraf ekleyin</Text>
+              <View style={styles.photoButtons}>
+                <Pressable style={styles.photoButton} onPress={takePhoto}>
+                  <Ionicons name="camera" size={20} color="#ffffff" />
+                  <Text style={styles.photoButtonText}>Çek</Text>
+                </Pressable>
+                <Pressable style={styles.photoButton} onPress={pickImage}>
+                  <Ionicons name="images" size={20} color="#ffffff" />
+                  <Text style={styles.photoButtonText}>Yükle</Text>
+                </Pressable>
+              </View>
+            </View>
           )}
-        />
-        {errors.caption && (
-          <Text className="text-danger text-sm mt-1">{errors.caption.message}</Text>
-        )}
-      </View>
+        </View>
 
-      {/* Submit Button */}
-      <Pressable
-        className={`py-4 rounded-xl mb-6 ${uploading ? 'bg-sub' : 'bg-primary'}`}
-        onPress={handleSubmit(onSubmit)}
-        disabled={uploading}
-      >
-        <Text className="text-center text-white font-semibold text-lg">
-          {uploading ? 'Yükleniyor...' : 'Görevi Gönder'}
-        </Text>
-      </Pressable>
-    </View>
+        {/* Description Section */}
+        <View style={styles.descriptionSection}>
+          <TextInput
+            style={styles.descriptionInput}
+            placeholder="Açıklama..."
+            placeholderTextColor="#9ca3af"
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* Sharing Options */}
+        <View style={styles.sharingSection}>
+          <View style={styles.sharingOption}>
+            <View style={styles.sharingOptionLeft}>
+              <Ionicons name="logo-facebook" size={20} color="#1877f2" />
+              <Text style={styles.sharingOptionText}>Facebook'ta Paylaş</Text>
+            </View>
+            <Switch
+              value={facebookShare}
+              onValueChange={setFacebookShare}
+              trackColor={{ false: '#e5e7eb', true: '#1877f2' }}
+              thumbColor={facebookShare ? '#ffffff' : '#ffffff'}
+            />
+          </View>
+
+          <View style={styles.sharingOption}>
+            <View style={styles.sharingOptionLeft}>
+              <Ionicons name="logo-twitter" size={20} color="#1da1f2" />
+              <Text style={styles.sharingOptionText}>Twitter'da Paylaş</Text>
+            </View>
+            <Switch
+              value={twitterShare}
+              onValueChange={setTwitterShare}
+              trackColor={{ false: '#e5e7eb', true: '#1da1f2' }}
+              thumbColor={twitterShare ? '#ffffff' : '#ffffff'}
+            />
+          </View>
+
+          <View style={styles.sharingOption}>
+            <View style={styles.sharingOptionLeft}>
+              <Ionicons name="chatbubble-outline" size={20} color="#6b7280" />
+              <Text style={styles.sharingOptionText}>Yorum yapılabilir</Text>
+            </View>
+            <Switch
+              value={commentsEnabled}
+              onValueChange={setCommentsEnabled}
+              trackColor={{ false: '#e5e7eb', true: '#06b6d4' }}
+              thumbColor={commentsEnabled ? '#ffffff' : '#ffffff'}
+            />
+          </View>
+        </View>
+
+        {/* Submit Button */}
+        <Pressable 
+          style={[styles.submitButton, uploading && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={uploading}
+        >
+          <LinearGradient
+            colors={['#06b6d4', '#0891b2', '#0e7490']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.submitGradient}
+          >
+            <Text style={styles.submitButtonText}>
+              {uploading ? 'Yükleniyor...' : 'Bende Varım'}
+            </Text>
+          </LinearGradient>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  photoSection: {
+    margin: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  selectedImageContainer: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  selectedImage: {
+    width: '100%',
+    height: 300,
+    resizeMode: 'cover',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoPlaceholder: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  photoPlaceholderText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  photoButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  photoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#06b6d4',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 8,
+  },
+  photoButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  descriptionSection: {
+    margin: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  descriptionInput: {
+    fontSize: 16,
+    color: '#1e293b',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  sharingSection: {
+    margin: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sharingOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  sharingOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sharingOptionText: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  submitButton: {
+    margin: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#06b6d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+});

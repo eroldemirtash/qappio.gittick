@@ -82,6 +82,38 @@ export async function GET() {
       return acc;
     }, {} as any) || {};
 
+    // If no settings found, return default settings
+    if (Object.keys(settings).length === 0) {
+      return new Response(JSON.stringify({ 
+        settings: {
+          theme: {
+            primary: "#2da2ff",
+            secondary: "#1b8ae6",
+            dark_mode: false
+          },
+          notifications: {
+            email_enabled: true,
+            push_enabled: true,
+            sms_enabled: false
+          },
+          login: {
+            logo_url: "",
+            cover_image_url: "",
+            show_facebook: true,
+            show_google: true,
+            show_apple: false,
+            show_phone: true,
+            show_manual_signup: true,
+            terms_url: "",
+            privacy_url: "",
+            custom_css: ""
+          }
+        }
+      }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" }
+      });
+    }
+
     return new Response(JSON.stringify({ settings }), {
       headers: { "content-type": "application/json", "cache-control": "no-store" }
     });
@@ -143,14 +175,35 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    const { data, error } = await s
+    // Check if setting exists
+    const { data: existing } = await s
       .from("app_settings")
-      .upsert({
-        key: settingKey,
-        value
-      })
-      .select()
+      .select("id")
+      .eq("key", settingKey)
       .single();
+
+    let result;
+    if (existing) {
+      // Update existing setting
+      result = await s
+        .from("app_settings")
+        .update({ value })
+        .eq("key", settingKey)
+        .select()
+        .single();
+    } else {
+      // Insert new setting
+      result = await s
+        .from("app_settings")
+        .insert({
+          key: settingKey,
+          value
+        })
+        .select()
+        .single();
+    }
+
+    const { data, error } = result;
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), { 

@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { jpost, jget, jpatch } from "@/lib/fetcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -51,7 +51,7 @@ interface Brand {
   name: string;
 }
 
-export default function BrandNewPage() {
+function BrandNewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
@@ -431,5 +431,13 @@ export default function BrandNewPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function BrandNewPage() {
+  return (
+    <Suspense fallback={<div className="page"><div className="card p-6">Yükleniyor...</div></div>}>
+      <BrandNewPageContent />
+    </Suspense>
   );
 }

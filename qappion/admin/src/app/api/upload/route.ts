@@ -1,72 +1,69 @@
-import { sbAdmin } from "@/lib/supabase-admin";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from '@supabase/supabase-js';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
-    const { bucket, fileName, fileBase64 } = await request.json();
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const folder = formData.get('folder') as string || 'uploads';
 
-    if (!bucket || !fileName || !fileBase64) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
-        status: 400,
-        headers: { "content-type": "application/json" }
-      });
+    if (!file) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!["brands", "missions"].includes(bucket)) {
-      return new Response(JSON.stringify({ error: "Invalid bucket" }), {
-        status: 400,
-        headers: { "content-type": "application/json" }
-      });
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: 'Only image files are allowed' }, { status: 400 });
     }
 
-    // Check if Supabase is configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder') || supabaseKey.includes('placeholder')) {
-      // Return demo URL when Supabase is not configured
-      return new Response(JSON.stringify({ 
-        url: `https://via.placeholder.com/400x300/2da2ff/ffffff?text=${fileName}` 
-      }), {
-        headers: { "content-type": "application/json" }
-      });
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
     }
 
-    const s = sbAdmin();
-    
-    // Decode base64
-    const base64Data = fileBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${timestamp}-${randomString}.${fileExtension}`;
+    const filePath = `${folder}/${fileName}`;
+
+    // Convert File to ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
     // Upload to Supabase Storage
-    const { data, error } = await s.storage
-      .from(bucket)
-      .upload(fileName, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true
+    const { data, error } = await supabase.storage
+      .from('product-assets')
+      .upload(filePath, uint8Array, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false
       });
 
     if (error) {
-      throw error;
+      console.error('Supabase upload error:', error);
+      return NextResponse.json({ error: 'Upload failed: ' + error.message }, { status: 500 });
     }
 
     // Get public URL
-    const { data: { publicUrl } } = s.storage
-      .from(bucket)
-      .getPublicUrl(fileName);
+    const { data: urlData } = supabase.storage
+      .from('product-assets')
+      .getPublicUrl(filePath);
 
-    return new Response(JSON.stringify({ url: publicUrl }), {
-      headers: { "content-type": "application/json" }
+    return NextResponse.json({ 
+      url: urlData.publicUrl,
+      path: filePath,
+      message: 'Upload successful'
     });
 
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { "content-type": "application/json" }
-    });
+  } catch (error) {
+    console.error('Upload API error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

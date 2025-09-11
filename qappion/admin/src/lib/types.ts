@@ -3,6 +3,7 @@ export interface Brand {
   name: string;
   is_active: boolean;
   created_at: string;
+  logo_url?: string;
   category?: string;
   email?: string;
   phone?: string;
@@ -74,6 +75,17 @@ export interface User {
   spendable_qp?: number;
   total_missions?: number;
   completed_missions?: number;
+  bio?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gender?: string;
+  socials?: {
+    instagram?: string;
+    facebook?: string;
+    tiktok?: string;
+    twitter?: string;
+  };
 }
 
 export interface Notification {
@@ -94,8 +106,6 @@ export interface Stats {
   total_users: number;
   total_notifications: number;
   total_qp_collected?: number;
-  total_products?: number;
-  active_products?: number;
 }
 
 export interface Level {
@@ -103,9 +113,15 @@ export interface Level {
   name: string;
   description: string;
   min_points: number;
-  max_points: number;
+  max_points: number | null;
   user_count: number;
+  product_count?: number;
+  mission_count?: number;
+  avg_points?: number;
   badge_letter: string;
+  color: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Share {
@@ -132,15 +148,32 @@ export interface Share {
 export interface MarketItem {
   id: string;
   name: string;
+  title?: string;
   description?: string;
   price_qp: number;
+  value_qp?: number;
   category: string;
   brand_id: string;
   is_active: boolean;
   stock?: number;
   image_url?: string;
-  brand?: {
+  cover_url?: string;
+  level?: number;
+  images?: string[];
+  features?: string[];
+  marketplace_links?: Array<{
+    id: number;
     name: string;
+    logo: string;
+    url: string;
+  }>;
+  brand?: {
+    id?: string;
+    name?: string;
+    logo_url?: string;
+    brand_profiles?: {
+      avatar_url?: string;
+    };
   };
 }
 

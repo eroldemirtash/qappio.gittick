@@ -3,10 +3,19 @@
     "name": "Qappio",
     "slug": "qappio",
     "scheme": "qappio",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "sdkVersion": "53.0.0",
-    "plugins": ["expo-router"],
-    "experiments": { "typedRoutes": true },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
     "android": {
       "package": "com.qappio.mobile"
     },

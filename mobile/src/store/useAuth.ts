@@ -7,9 +7,11 @@ interface AuthState {
   profile: any | null;
   loading: boolean;
   signIn: (email: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
   updateProfile: (updates: any) => Promise<void>;
+  initialize: () => void;
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -29,6 +31,33 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (error) throw error;
     } catch (error) {
       console.error('Sign in error:', error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  signUp: async (email: string, password: string) => {
+    set({ loading: true });
+    try {
+      console.log('🔄 Starting signup process...');
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) throw error;
+      
+      console.log('✅ Auth signup successful:', data.user?.id);
+      
+      if (data.user) {
+        set({ user: data.user });
+        console.log('✅ User set in store, profile will be created later');
+        
+        // Profil oluşturmayı atla, sadece user'ı set et
+        // Profil düzenle sayfasında oluşturulacak
+      }
+    } catch (error) {
+      console.error('❌ Sign up error:', error);
       throw error;
     } finally {
       set({ loading: false });
@@ -88,5 +117,45 @@ export const useAuth = create<AuthState>((set, get) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  initialize: () => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        set({ user: session.user });
+        // Fetch profile
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            set({ profile });
+          });
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      if (session?.user) {
+        set({ user: session.user });
+        // Fetch profile
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            set({ profile });
+          });
+      } else {
+        set({ user: null, profile: null });
+      }
+    });
+
+    // Return cleanup function
+    return () => subscription.unsubscribe();
   },
 }));

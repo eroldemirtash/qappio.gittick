@@ -148,6 +148,7 @@ export default function MissionNewPage() {
       
       const missionData = {
         ...v,
+        brief: v.description, // brief alanına da kaydet
         published: shouldPublish
       };
       
