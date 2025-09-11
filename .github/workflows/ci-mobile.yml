@@ -8,14 +8,11 @@ jobs:
         working-directory: qappion/mobile
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with: { version: 9 }
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm i
+          cache: 'npm'
+      - run: npm ci
       - run: npx expo-doctor
-      - run: pnpm -s lint || true
+      - run: npm run -s lint || true
 
