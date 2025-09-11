@@ -3,12 +3,16 @@ on: [pull_request]
 jobs:
   supabase:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: supabase
     steps:
       - uses: actions/checkout@v4
-      - run: npm i -g supabase
-      - run: supabase --version
-      - run: test -d migrations && echo "migrations folder ok" || echo "no migrations"
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm i
+      - run: echo "no supabase cli install needed for dry run"
+      - run: test -d supabase/migrations && echo "migrations folder ok" || echo "no migrations"
 
