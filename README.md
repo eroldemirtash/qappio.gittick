@@ -27,7 +27,7 @@ Kök `.env.example` dosyasını referans alarak `.env` oluşturun. Gerçek anaht
 
 ## CI
 - Admin: Next build (klasör içinde)
-- Mobile: Expo doctor + lint placeholder
+- Mobile: expo-doctor + lint placeholder
 - Supabase: migrations klasörü dry-run kontrolü
 
 ## LFS

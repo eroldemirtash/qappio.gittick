@@ -17,6 +17,6 @@ jobs:
           node-version: 20
           cache: 'npm'
       - run: npm ci
-      - run: npx expo-doctor
+      - run: npx -y expo-doctor
       - run: npm run -s lint || true
 
