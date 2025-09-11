@@ -16,6 +16,6 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm i
-      - run: npx expo doctor
+      - run: npx expo-doctor
       - run: pnpm -s lint || true
 
