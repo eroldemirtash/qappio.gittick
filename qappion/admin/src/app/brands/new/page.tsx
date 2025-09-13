@@ -179,49 +179,60 @@ function BrandNewPageContent() {
   async function onSubmit(v: FormVals) {
     try {
       setIsSubmitting(true);
+      console.log('🔍 Form submit data:', v);
       
       if (v.brand_id) {
+        console.log('🔍 Updating existing brand:', v.brand_id);
+        
         // Update existing brand
-        await jpatch(`/api/brands/${v.brand_id}`, {
+        const brandUpdateData = {
           name: v.name,
           is_active: v.is_active
-        });
+        };
+        console.log('🔍 Brand update data:', brandUpdateData);
+        await jpatch(`/api/brands/${v.brand_id}`, brandUpdateData);
         
         // Update profile
-        await jpost(`/api/brands/${v.brand_id}/profile`, {
+        const profileUpdateData = {
           category: v.category,
           description: v.description,
           email: v.email,
           phone: v.phone,
           avatar_url: v.logo_url,
           cover_url: v.cover_url
-        });
+        };
+        console.log('🔍 Profile update data:', profileUpdateData);
+        await jpost(`/api/brands/${v.brand_id}/profile`, profileUpdateData);
         
         toast.success("Marka güncellendi");
-        router.push(`/brands/profile/new?edit=${v.brand_id}`);
+        router.push("/brands");
       } else {
         // Create new brand
-        const brandResponse = await jpost("/api/brands", {
+        const brandCreateData = {
           name: v.name,
           is_active: v.is_active
-        });
+        };
+        console.log('🔍 Brand create data:', brandCreateData);
+        const brandResponse = await jpost("/api/brands", brandCreateData);
         
         // Yeni marka oluşturulduktan sonra profil de oluştur
         if (brandResponse && brandResponse.id) {
-          await jpost(`/api/brands/${brandResponse.id}/profile`, {
+          const profileCreateData = {
             category: v.category,
             description: v.description,
             email: v.email,
             phone: v.phone,
             avatar_url: v.logo_url,
             cover_url: v.cover_url
-          });
+          };
+          console.log('🔍 Profile create data:', profileCreateData);
+          await jpost(`/api/brands/${brandResponse.id}/profile`, profileCreateData);
         }
         toast.success("Marka oluşturuldu");
+        router.push("/brands");
       }
-      
-      router.push("/brands");
     } catch (error: any) {
+      console.error('❌ Form submit error:', error);
       toast.error(error.message || "Bir hata oluştu");
     } finally {
       setIsSubmitting(false);

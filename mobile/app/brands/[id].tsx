@@ -263,7 +263,14 @@ export default function BrandProfileScreen() {
         // Fallback: derive from a published mission join (RLS for missions allows anon)
         const { data: mb } = await supabase
           .from('missions')
-          .select('brand_id, brands!missions_brand_id_fkey(name, logo_url)')
+          .select(`
+            brand_id,
+            brands!missions_brand_id_fkey (
+              id,
+              name,
+              logo_url
+            )
+          `)
           .eq('brand_id', brandId)
           .limit(1);
         const derived = (mb && mb[0]) ? {
@@ -326,7 +333,7 @@ export default function BrandProfileScreen() {
                 linkedin:  toUrl('linkedin',  p.social_linkedin)  || ((b as any)?.socials || {}).linkedin,
               },
               cover_url: (b as any)?.cover_url || p.cover_url,
-              logo_url: (b as any)?.logo_url || p.avatar_url,
+              logo_url: p.avatar_url || (b as any)?.logo_url,
             };
             setBrand(merged);
           }
@@ -338,7 +345,14 @@ export default function BrandProfileScreen() {
         try {
           const vm = await supabase
             .from('missions')
-            .select('brand_id, brands!missions_brand_id_fkey(name, logo_url)')
+            .select(`
+              brand_id,
+              brands!missions_brand_id_fkey (
+                id,
+                name,
+                logo_url
+              )
+            `)
             .or(isUuid ? `brand_id.eq.${brandId}` : `brands.name.ilike.%${brandId}%`)
             .limit(1)
             .maybeSingle();
@@ -361,27 +375,30 @@ export default function BrandProfileScreen() {
         } catch {}
       }
 
-      // Missions (published or null)
+      // Missions
       let ms: any[] | null = null; let me: any = null;
+      
       if (effectiveId) {
         const res = await supabase
           .from('missions')
-          .select(`id,title,brand_id,cover_url,brief,description,starts_at,ends_at,published,reward_qp`)
+          .select(`id,title,brand_id,cover_url,brief,description,starts_at,ends_at,status,reward_qp`)
           .eq('brand_id', effectiveId)
+          .eq('status', 'published')
           .order('created_at', { ascending: false });
         ms = res.data as any[]; me = res.error;
-        console.log('🔍 Missions debug:', { effectiveId, ms, me });
       } else {
         // İsme göre missions + brands join
         const res = await supabase
           .from('missions')
-          .select(`id,title,brand_id,cover_url,brief,description,starts_at,ends_at,reward_qp,brands!missions_brand_id_fkey(name, logo_url)`)
-          .ilike('brands.name', `%${brandId}%`)
+          .select(`id,title,brand_id,cover_url,brief,description,starts_at,ends_at,status,reward_qp,brands!missions_brand_id_fkey(name, logo_url)`)
+          .eq('status', 'published')
           .order('created_at', { ascending: false });
         ms = res.data as any[]; me = res.error;
-        console.log('🔍 Missions by name debug:', { brandId, ms, me });
       }
-      if (me) throw me;
+      if (me) {
+        console.error('Missions query error:', me);
+        ms = [];
+      }
       
       // Mock veriler ekle (gerçek uygulamada bu veriler submissions tablosundan gelecek)
       const missionsWithStats = (ms || []).map(mission => ({
@@ -392,27 +409,27 @@ export default function BrandProfileScreen() {
       
       setMissions(missionsWithStats);
 
-      // Products (if table exists)
+      // Products
       try {
         if (effectiveId) {
           const { data: ps } = await supabase
             .from('products')
             .select(`id,title,brand_id,cover_url,is_active`)
             .eq('brand_id', effectiveId)
+            .eq('is_active', true)
             .order('created_at', { ascending: false });
-          console.log('🔍 Products debug:', { effectiveId, ps });
           setProducts((ps as any) || []);
         } else {
           const { data: ps } = await supabase
             .from('products')
             .select(`id,title,brand_id,cover_url,is_active,brands!products_brand_id_fkey(name)`) 
             .ilike('brands.name', `%${brandId}%`)
+            .eq('is_active', true)
             .order('created_at', { ascending: false });
-          console.log('🔍 Products by name debug:', { brandId, ps });
           setProducts((ps as any) || []);
         }
       } catch (e) {
-        console.log('🔍 Products error:', e);
+        console.error('Products error:', e);
         setProducts([]);
       }
     } catch (e: any) {
@@ -456,8 +473,9 @@ export default function BrandProfileScreen() {
     brand_profiles: null,
   };
 
-  const logo = (brandSafe as any).logo_url || (brandSafe.brand_profiles as any)?.logo_url || (brandSafe.brand_profiles as any)?.avatar_url || '';
-  const cover = brandSafe.cover_url || (brandSafe.brand_profiles as any)?.cover_url || 'https://picsum.photos/seed/brandcover/1200/600';
+  // Önce brand_profiles.avatar_url'yi kontrol et (güncel), sonra brands.logo_url'yi fallback olarak kullan
+  const logo = (brandSafe.brand_profiles as any)?.avatar_url || (brandSafe as any).logo_url || '';
+  const cover = brandSafe.cover_url || (brandSafe.brand_profiles as any)?.cover_url || null;
   const socialsBase = (brandSafe.socials || {}) as Record<string, string>;
   const socials: Record<string, string> = {
     instagram: socialsBase.instagram || (brandSafe as any).instagram_url || '',
@@ -481,21 +499,39 @@ export default function BrandProfileScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }} contentContainerStyle={{ paddingBottom: 24 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       {/* Header – user profil yapısı ile aynı hiyerarşi */}
       <View style={styles.profileHeaderWrap}>
-        <ImageBackground source={{ uri: cover }} style={styles.headerBg} imageStyle={styles.headerBgImg}>
-          <View style={styles.headerOverlayBg} />
-          <View style={styles.headerContentRow}>
-            <View style={styles.avatarBigWrap}>
-              <View style={{ width: '100%', height: '100%', backgroundColor: '#e2e8f0' }}>
-                {!!logo && (<Image source={{ uri: logo }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />)}
+        {cover ? (
+          <ImageBackground source={{ uri: cover }} style={styles.headerBg} imageStyle={styles.headerBgImg}>
+            <View style={styles.headerOverlayBg} />
+            <View style={styles.headerContentRow}>
+              <View style={styles.avatarBigWrap}>
+                <View style={{ width: '100%', height: '100%', backgroundColor: '#e2e8f0' }}>
+                  {!!logo && (<Image source={{ uri: logo }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />)}
+                </View>
+              </View>
+              <View style={{ marginLeft: 12, maxWidth: '75%' }}>
+                <Text style={[styles.fullnameText, { color: '#ffffff' }]} numberOfLines={1}>{brandSafe.name}</Text>
+                {!!brandSafe.category && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{brandSafe.category}</Text>)}
+                {!!brandSafe.email && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{brandSafe.email}</Text>)}
               </View>
             </View>
-            <View style={{ marginLeft: 12, maxWidth: '75%' }}>
-              <Text style={[styles.fullnameText, { color: '#ffffff' }]} numberOfLines={1}>{brandSafe.name}</Text>
-              {!!brandSafe.category && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{brandSafe.category}</Text>)}
-              {!!brandSafe.email && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{brandSafe.email}</Text>)}
+          </ImageBackground>
+        ) : (
+          <View style={[styles.headerBg, { backgroundColor: '#6366f1' }]}>
+            <View style={styles.headerOverlayBg} />
+            <View style={styles.headerContentRow}>
+              <View style={styles.avatarBigWrap}>
+                <View style={{ width: '100%', height: '100%', backgroundColor: '#e2e8f0' }}>
+                  {!!logo && (<Image source={{ uri: logo }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />)}
+                </View>
+              </View>
+              <View style={{ marginLeft: 12, maxWidth: '75%' }}>
+                <Text style={[styles.fullnameText, { color: '#ffffff' }]} numberOfLines={1}>{brandSafe.name}</Text>
+                {!!brandSafe.category && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{brandSafe.category}</Text>)}
+                {!!brandSafe.email && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{brandSafe.email}</Text>)}
+              </View>
             </View>
           </View>
-        </ImageBackground>
+        )}
       </View>
 
       {/* Web & Sosyal Satırı */}

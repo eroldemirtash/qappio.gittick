@@ -20,102 +20,141 @@ export default function MissionDetailScreen() {
   const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<any[]>([]);
-  const [topUsers, setTopUsers] = useState([
-    { id: '1', name: 'user1', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face', likes: 245, rank: 1, level: 'gold' },
-    { id: '2', name: 'user2', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face', likes: 198, rank: 2, level: 'silver' },
-    { id: '3', name: 'user3', avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face', likes: 156, rank: 3, level: 'bronze' },
-    { id: '4', name: 'user4', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face', likes: 134, rank: 4, level: 'bronze' },
-    { id: '5', name: 'user5', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face', likes: 98, rank: 5, level: 'bronze' },
-  ]);
+  const [topUsers, setTopUsers] = useState<any[]>([]);
+  const [totalLikes, setTotalLikes] = useState(0);
+  const [totalPosts, setTotalPosts] = useState(0);
 
   const fetchPosts = async () => {
-    // Mock data for posts - FeedCard format
-    setPosts([
-      {
-        id: '1',
-        media_type: 'image',
-        media_url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80&fit=crop',
-        caption: 'Yeni koleksiyonumuzu keşfedin! 🎉 #fashion #style',
-        like_count: 245,
-        comment_count: 12,
-        created_at: new Date().toISOString(),
-        is_sponsored: false,
-        sponsor_brand: null,
-        user: {
-          id: 'user-1',
-          display_name: 'kullanici1',
-          avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-          level_name: 'Snapper',
-          level_tier: 1
-        },
-        mission: {
-          id: '1',
-          title: 'Instagram\'da Paylaş',
-          brand: {
-            id: 'brand-1',
-            name: 'Coca Cola',
-            logo_url: 'https://via.placeholder.com/50'
+    if (!id) {
+      console.log('❌ No mission ID provided for posts');
+      setPosts([]);
+      return;
+    }
+    
+    console.log('🔍 Fetching posts for mission ID:', id);
+    
+    try {
+      const { data: postsData, error: postsError } = await supabase
+        .from('submissions')
+        .select(`
+          id,
+          media_type,
+          media_url,
+          caption,
+          like_count,
+          comment_count,
+          created_at,
+          is_sponsored,
+          sponsor_brand,
+          user_id,
+          mission_id,
+          profiles!submissions_user_id_fkey (
+            id,
+            display_name,
+            avatar_url,
+            level_name,
+            level_tier
+          )
+        `)
+        .eq('mission_id', id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (postsError) {
+        console.error('❌ Posts fetch error:', postsError);
+        setPosts([]);
+        return;
+      }
+      
+      console.log('✅ REAL SUBMISSIONS DATA:', postsData);
+      
+      if (postsData && postsData.length > 0) {
+        const mappedPosts = postsData.map((post: any) => ({
+          id: post.id,
+          media_type: post.media_type || 'image',
+          media_url: post.media_url || 'https://via.placeholder.com/400',
+          caption: post.caption || '',
+          like_count: post.like_count || 0,
+          comment_count: post.comment_count || 0,
+          created_at: post.created_at,
+          is_sponsored: post.is_sponsored || false,
+          sponsor_brand: post.sponsor_brand || null,
+          user: {
+            id: post.profiles?.id || 'unknown',
+            display_name: post.profiles?.display_name || 'Kullanıcı',
+            avatar_url: post.profiles?.avatar_url || 'https://via.placeholder.com/50',
+            level_name: post.profiles?.level_name || 'Snapper',
+            level_tier: post.profiles?.level_tier || 1
+          },
+          mission: {
+            id: post.mission_id,
+            title: mission?.title || 'Görev',
+            brand: mission?.brand ? {
+              id: mission.brand.id,
+              name: mission.brand.name,
+              logo_url: mission.brand.logoUrl
+            } : null
+          },
+          comments: [] // TODO: Fetch comments if needed
+        }));
+        
+        setPosts(mappedPosts);
+        
+        // Calculate total likes and posts
+        const totalLikesCount = mappedPosts.reduce((sum, post) => sum + (post.like_count || 0), 0);
+        const totalPostsCount = mappedPosts.length;
+        setTotalLikes(totalLikesCount);
+        setTotalPosts(totalPostsCount);
+        
+        // Calculate top users ranking
+        const userStats = new Map();
+        mappedPosts.forEach(post => {
+          const userId = post.user.id;
+          const userLikes = post.like_count || 0;
+          
+          if (userStats.has(userId)) {
+            userStats.set(userId, {
+              ...userStats.get(userId),
+              likes: userStats.get(userId).likes + userLikes,
+              posts: userStats.get(userId).posts + 1
+            });
+          } else {
+            userStats.set(userId, {
+              id: userId,
+              name: post.user.display_name,
+              avatar: post.user.avatar_url,
+              level: post.user.level_name,
+              likes: userLikes,
+              posts: 1
+            });
           }
-        },
-        comments: []
-      },
-      {
-        id: '2',
-        media_type: 'image',
-        media_url: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800&q=80&fit=crop',
-        caption: 'Harika bir gün! ☀️ #summer #fun',
-        like_count: 198,
-        comment_count: 8,
-        created_at: new Date().toISOString(),
-        is_sponsored: false,
-        sponsor_brand: null,
-        user: {
-          id: 'user-2',
-          display_name: 'kullanici2',
-          avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
-          level_name: 'Seeker',
-          level_tier: 2
-        },
-        mission: {
-          id: '1',
-          title: 'Instagram\'da Paylaş',
-          brand: {
-            id: 'brand-1',
-            name: 'Coca Cola',
-            logo_url: 'https://via.placeholder.com/50'
-          }
-        },
-        comments: []
-      },
-      {
-        id: '3',
-        media_type: 'image',
-        media_url: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80&fit=crop',
-        caption: 'Mükemmel an! 📸 #photography #art',
-        like_count: 156,
-        comment_count: 23,
-        created_at: new Date().toISOString(),
-        is_sponsored: false,
-        sponsor_brand: null,
-        user: {
-          id: 'user-3',
-          display_name: 'kullanici3',
-          avatar_url: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
-          level_name: 'Crafter',
-          level_tier: 3
-        },
-        mission: {
-          id: '1',
-          title: 'Instagram\'da Paylaş',
-          brand: {
-            id: 'brand-1',
-            name: 'Coca Cola',
-            logo_url: 'https://via.placeholder.com/50'
-          }
-        },
-        comments: []
-      },
-    ]);
+        });
+        
+        // Sort by total likes and create ranking
+        const sortedUsers = Array.from(userStats.values())
+          .sort((a, b) => b.likes - a.likes)
+          .slice(0, 5)
+          .map((user, index) => ({
+            ...user,
+            rank: index + 1
+          }));
+        
+        setTopUsers(sortedUsers);
+        console.log('🎉 REAL POSTS LOADED SUCCESSFULLY!');
+        console.log('📊 TOTAL LIKES:', totalLikesCount);
+        console.log('📊 TOTAL POSTS:', totalPostsCount);
+        console.log('🏆 TOP USERS:', sortedUsers);
+      } else {
+        console.log('⚠️ NO SUBMISSIONS FOUND FOR THIS MISSION');
+        setPosts([]);
+        setTopUsers([]);
+        setTotalLikes(0);
+        setTotalPosts(0);
+      }
+    } catch (err) {
+      console.error('❌ Posts fetch error:', err);
+      setPosts([]);
+    }
   };
 
   const fetchMission = async () => {
@@ -132,15 +171,16 @@ export default function MissionDetailScreen() {
         .select(`
           id,
           title,
-          brief,
           description,
           cover_url,
-          reward_qp,
+          qp_reward,
           starts_at,
           ends_at,
-          brand_id
+          brand_id,
+          published
         `)
         .eq('id', id)
+        .eq('published', true)
         .single();
 
       if (missionError) {
@@ -181,9 +221,9 @@ export default function MissionDetailScreen() {
         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
         
         if (days > 0) {
-          timeLeftText = `${days}g ${hours}s`;
+          timeLeftText = `${days}g ${hours}s ${minutes}dk`;
         } else if (hours > 0) {
-          timeLeftText = `${hours}s ${minutes}d`;
+          timeLeftText = `${hours}s ${minutes}dk`;
         } else {
           timeLeftText = `${minutes}dk`;
         }
@@ -192,10 +232,9 @@ export default function MissionDetailScreen() {
       const mappedMission = {
         id: missionData.id,
         title: missionData.title,
-        brief: missionData.brief,
         description: missionData.description,
         coverUrl: missionData.cover_url,
-        qpValue: missionData.reward_qp,
+        qpValue: missionData.qp_reward,
         timeLeft: timeLeftText,
         brand: brandData ? {
           id: brandData.id,
@@ -203,8 +242,8 @@ export default function MissionDetailScreen() {
           logoUrl: brandData.logo_url,
           coverUrl: null
         } : null,
-        totalLikes: 245,
-        totalPosts: 12,
+        totalLikes: totalLikes,
+        totalPosts: totalPosts,
       };
       
       console.log('🎯 Mapped mission:', mappedMission);
@@ -221,11 +260,18 @@ export default function MissionDetailScreen() {
   useEffect(() => {
     const loadData = async () => {
       await fetchMission();
-      await fetchPosts();
+      // Posts will be fetched after mission is loaded
     };
     
     loadData();
   }, [id]);
+
+  // Fetch posts after mission is loaded
+  useEffect(() => {
+    if (mission) {
+      fetchPosts();
+    }
+  }, [mission]);
 
   const getRankColor = (rank: number) => {
     switch (rank) {
@@ -283,22 +329,28 @@ export default function MissionDetailScreen() {
                  {/* Scrollable Users */}
                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rankingScroll}>
                    {/* Top Users */}
-                   {topUsers.map((user, index) => (
-                     <View key={user.id} style={styles.rankingItem}>
-                       <View style={styles.rankingAvatarContainer}>
-                         <Image source={{ uri: user.avatar }} style={styles.rankingAvatar} />
-                         <View style={[styles.rankBadge, { backgroundColor: getRankColor(user.rank) }]}>
-                           <Text style={styles.rankText}>{user.rank}</Text>
+                   {topUsers.length > 0 ? (
+                     topUsers.map((user, index) => (
+                       <View key={user.id} style={styles.rankingItem}>
+                         <View style={styles.rankingAvatarContainer}>
+                           <Image source={{ uri: user.avatar }} style={styles.rankingAvatar} />
+                           <View style={[styles.rankBadge, { backgroundColor: getRankColor(user.rank) }]}>
+                             <Text style={styles.rankText}>{user.rank}</Text>
+                           </View>
+                         </View>
+                         <View style={styles.rankingStats}>
+                           <View style={styles.rankingStat}>
+                             <Ionicons name="heart" size={12} color="#ef4444" />
+                             <Text style={styles.rankingStatText}>{user.likes}</Text>
+                           </View>
                          </View>
                        </View>
-                       <View style={styles.rankingStats}>
-                         <View style={styles.rankingStat}>
-                           <Ionicons name="heart" size={12} color="#ef4444" />
-                           <Text style={styles.rankingStatText}>{user.likes}</Text>
-                         </View>
-                       </View>
+                     ))
+                   ) : (
+                     <View style={styles.emptyRankingContainer}>
+                       <Text style={styles.emptyRankingText}>Henüz sıralama yok</Text>
                      </View>
-                   ))}
+                   )}
                  </ScrollView>
                </View>
              </View>
@@ -409,15 +461,22 @@ export default function MissionDetailScreen() {
 
         {/* Posts Section */}
         <View style={styles.postsSection}>
-          {posts.map((post) => (
-            <FeedCard 
-              key={post.id} 
-              post={post}
-              onLike={(postId) => console.log('Like post:', postId)}
-              onComment={(postId, text) => console.log('Comment on post:', postId, text)}
-              onShare={(postId) => console.log('Share post:', postId)}
-            />
-          ))}
+          {posts.length > 0 ? (
+            posts.map((post) => (
+              <FeedCard 
+                key={post.id} 
+                post={post}
+                onLike={(postId) => console.log('Like post:', postId)}
+                onComment={(postId, text) => console.log('Comment on post:', postId, text)}
+                onShare={(postId) => console.log('Share post:', postId)}
+              />
+            ))
+          ) : (
+            <View style={styles.emptyPostsContainer}>
+              <Text style={styles.emptyPostsText}>Henüz paylaşım yok</Text>
+              <Text style={styles.emptyPostsSubtext}>İlk paylaşımı sen yap!</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -760,6 +819,32 @@ const styles = StyleSheet.create({
   postsSection: {
     paddingHorizontal: 16,
     marginBottom: 20,
+  },
+  emptyPostsContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyPostsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  emptyPostsSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+  },
+  emptyRankingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+  },
+  emptyRankingText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontStyle: 'italic',
   },
   modalOverlay: {
     flex: 1,

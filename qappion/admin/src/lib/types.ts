@@ -156,6 +156,7 @@ export interface MarketItem {
   brand_id: string;
   is_active: boolean;
   stock?: number;
+  stock_status?: 'in_stock' | 'low' | 'out_of_stock' | 'hidden';
   image_url?: string;
   cover_url?: string;
   level?: number;

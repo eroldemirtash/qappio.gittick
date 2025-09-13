@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { Combobox } from "@/components/ui/Combobox";
 import { toast } from "sonner";
+import MobileMissionPreview from "@/components/missions/MobileMissionPreview";
 
 const Schema = z.object({
   title: z.string().min(3, "En az 3 karakter"),
@@ -69,6 +70,9 @@ export default function MissionNewPage() {
   const isQappioOfWeek = watch("is_qappio_of_week");
   const isSponsored = watch("is_sponsored");
   const startsAt = watch("starts_at");
+  
+  // Watch all form data for preview
+  const watchedData = watch();
 
   // Debug coverUrl
   console.log('coverUrl value:', coverUrl);
@@ -175,7 +179,9 @@ export default function MissionNewPage() {
         <p className="text-slate-600 mt-2">Yeni bir görev oluşturun ve sisteme ekleyin.</p>
       </div>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-6 max-w-2xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Form */}
+        <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-6">
         {/* Başlık */}
         <div>
           <label className="block text-sm font-medium mb-2">Başlık *</label>
@@ -417,6 +423,29 @@ export default function MissionNewPage() {
           </Button>
         </div>
       </form>
+      
+      {/* Mobile Preview */}
+      <div className="card p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">Mobil Önizleme</h3>
+          <p className="text-sm text-slate-600">Görevinizin mobil uygulamada nasıl görüneceğini buradan kontrol edebilirsiniz.</p>
+        </div>
+        <div className="flex justify-center">
+          <MobileMissionPreview formData={{
+            title: watchedData.title || "",
+            brief: watchedData.description || "",
+            description: watchedData.description || "",
+            cover_url: watchedData.cover_url || "",
+            reward_qp: watchedData.reward_qp || 0,
+            starts_at: watchedData.starts_at || "",
+            ends_at: watchedData.ends_at || "",
+            brand_id: watchedData.brand_id || "",
+            brand_name: brands.find(b => b.id === watchedData.brand_id)?.name || "",
+            brand_logo: brands.find(b => b.id === watchedData.brand_id)?.brand_profiles?.avatar_url || ""
+          }} />
+        </div>
+      </div>
+    </div>
     </div>
   );
 }

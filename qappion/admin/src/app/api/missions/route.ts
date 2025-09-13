@@ -23,13 +23,27 @@ export async function GET() {
       );
     }
 
-    // Brands bilgilerini çekelim
+    // Brands bilgilerini çekelim - brands API'si ile aynı yöntem
     const { data: brands, error: brandsError } = await supabase
       .from('brands')
-      .select('id,name,brand_profiles(*)');
+      .select(`
+        id, name, logo_url, is_active, created_at, updated_at, socials, email, website, category, description, cover_url
+      `);
 
     if (brandsError) {
       console.error('Brands fetch error:', brandsError);
+    }
+
+    // Brand_profiles'ı ayrı çek ve birleştir
+    let brandProfilesMap = new Map();
+    if (brands && brands.length > 0) {
+      const brandIds = brands.map(b => b.id).filter(Boolean);
+      const { data: profiles } = await supabase
+        .from('brand_profiles')
+        .select('*')
+        .in('brand_id', brandIds);
+      
+      brandProfilesMap = new Map((profiles || []).map((p: any) => [p.brand_id, p]));
     }
 
     // Missions'a brand ve sponsor bilgilerini ekleyelim
@@ -38,9 +52,9 @@ export async function GET() {
       // Test için manuel sponsor brand ekle
       const sponsorBrand = mission.id === 'b0ca6247-035c-41a6-aabb-c4a441c95278' ? brands?.find(b => b.name === 'Burger King') : null;
       
-      // brand_profiles array'den ilk elemanı al
-      const bp = Array.isArray(brand?.brand_profiles) ? brand.brand_profiles[0] : brand?.brand_profiles || {};
-      const logo = bp?.logo_url ?? bp?.logo ?? bp?.avatar_url ?? bp?.image_url;
+      // brand_profiles'ı map'ten al
+      const bp = brand ? brandProfilesMap.get(brand.id) : null;
+      const logo = bp?.avatar_url ?? bp?.logo_url ?? bp?.logo ?? bp?.image_url ?? brand?.logo_url;
       
       return {
         ...mission,
@@ -48,15 +62,12 @@ export async function GET() {
           id: brand.id,
           name: brand.name,
           logo_url: logo,
-          brand_profiles: null
+          brand_profiles: bp
         } : null,
         sponsor_brand: sponsorBrand ? {
           id: sponsorBrand.id,
           name: sponsorBrand.name,
-          logo_url: (Array.isArray(sponsorBrand.brand_profiles) ? sponsorBrand.brand_profiles[0] : sponsorBrand.brand_profiles)?.logo_url ?? 
-                   (Array.isArray(sponsorBrand.brand_profiles) ? sponsorBrand.brand_profiles[0] : sponsorBrand.brand_profiles)?.logo ?? 
-                   (Array.isArray(sponsorBrand.brand_profiles) ? sponsorBrand.brand_profiles[0] : sponsorBrand.brand_profiles)?.avatar_url ?? 
-                   (Array.isArray(sponsorBrand.brand_profiles) ? sponsorBrand.brand_profiles[0] : sponsorBrand.brand_profiles)?.image_url,
+          logo_url: sponsorBrand.logo_url,
           brand_profiles: null
         } : null,
         // Frontend için ek alanlar
@@ -98,17 +109,12 @@ export async function POST(request: NextRequest) {
         .from('missions')
         .insert({
           title: body.title,
-          brief: body.description || body.brief || "Test görevi açıklaması",
+          description: body.description || "Test görevi açıklaması",
           brand_id: body.brand_id || null,
-          reward_qp: body.reward_qp || body.qp_reward || 0,
-          published: body.published || body.is_published || false,
+          qp_reward: body.reward_qp || 0,
           cover_url: body.cover_url || null,
-          is_qappio_of_week: body.is_qappio_of_week || false,
-          is_sponsored: body.is_sponsored || false,
-          sponsor_brand_id: body.sponsor_brand_id || null,
           starts_at: body.starts_at || now.toISOString(),
-          ends_at: body.ends_at || thirtyDaysLater.toISOString(),
-          deadline: body.deadline || thirtyDaysLater.toISOString()
+          ends_at: body.ends_at || thirtyDaysLater.toISOString()
         })
         .select('*')
         .single();
@@ -132,7 +138,7 @@ export async function POST(request: NextRequest) {
           brand_id: body.brand_id,
           starts_at: body.starts_at ?? now.toISOString(),
           ends_at: body.ends_at ?? thirtyDaysLater.toISOString(),
-          qp_reward: (body.reward_qp ?? body.qp_reward ?? 0),
+          reward_qp: (body.reward_qp ?? body.qp_reward ?? 0),
           is_published: (body.published ?? body.is_published ?? false),
           // cover_url: body.cover_url || null,
           is_qappio_of_week: body.is_qappio_of_week || false,

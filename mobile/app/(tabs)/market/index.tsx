@@ -106,6 +106,10 @@ export default function MarketScreen() {
           description: (p as any).description || (p as any).detail || undefined,
           is_active: p.is_active,
         }});
+        
+        console.log('🎉 REAL PRODUCTS LOADED FROM SUPABASE:', transformed.length);
+        console.log('🎉 PRODUCTS DATA:', transformed);
+        
         if (active) setRemoteProducts(transformed);
       } catch (e: any) {
         console.log('Market fetch error', e?.message || e, e?.details || '');
@@ -181,128 +185,7 @@ export default function MarketScreen() {
     { id: 21, name: 'Sezonluk & Hediyelik', icon: 'gift-outline' },
   ];
 
-  const products = [
-    { 
-      id: 1, 
-      name: 'iPhone 15 Pro', 
-      brand: 'Apple', 
-      stock: 5, 
-      price: 2500, 
-      level: 4, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1592899677977-9c10df588fb0?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 2, 
-      name: 'Nike Air Max', 
-      brand: 'Nike', 
-      stock: 12, 
-      price: 800, 
-      level: 2, 
-      category: 'Spor',
-      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 3, 
-      name: 'Samsung Galaxy', 
-      brand: 'Samsung', 
-      stock: 8, 
-      price: 1800, 
-      level: 3, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 4, 
-      name: 'Adidas T-Shirt', 
-      brand: 'Adidas', 
-      stock: 25, 
-      price: 150, 
-      level: 1, 
-      category: 'Giyim',
-      image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 5, 
-      name: 'MacBook Pro', 
-      brand: 'Apple', 
-      stock: 3, 
-      price: 5000, 
-      level: 5, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 6, 
-      name: 'Sony WH-1000XM5', 
-      brand: 'Sony', 
-      stock: 15, 
-      price: 1200, 
-      level: 3, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 7, 
-      name: 'Nike Dri-FIT Hoodie', 
-      brand: 'Nike', 
-      stock: 20, 
-      price: 300, 
-      level: 2, 
-      category: 'Giyim',
-      image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 8, 
-      name: 'Samsung Galaxy Watch', 
-      brand: 'Samsung', 
-      stock: 10, 
-      price: 600, 
-      level: 3, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 9, 
-      name: 'Puma RS-X', 
-      brand: 'Puma', 
-      stock: 18, 
-      price: 450, 
-      level: 2, 
-      category: 'Spor',
-      image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 10, 
-      name: 'Apple AirPods Pro', 
-      brand: 'Apple', 
-      stock: 25, 
-      price: 800, 
-      level: 3, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 11, 
-      name: 'Adidas Ultraboost 22', 
-      brand: 'Adidas', 
-      stock: 14, 
-      price: 700, 
-      level: 3, 
-      category: 'Spor',
-      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop&crop=center'
-    },
-    { 
-      id: 12, 
-      name: 'Samsung 4K TV', 
-      brand: 'Samsung', 
-      stock: 6, 
-      price: 3500, 
-      level: 5, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400&h=400&fit=crop&crop=center'
-    },
-  ];
+  // Mock data removed - using real data from Supabase
 
   const renderLevelBar = () => (
     <View style={styles.levelBarContainer}>
@@ -528,7 +411,7 @@ export default function MarketScreen() {
     );
   };
 
-  // Use remote products if available, otherwise fallback to local mock data
+  // Use only real data from Supabase
   const dataSource = remoteProducts || [];
 
   return (

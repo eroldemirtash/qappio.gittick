@@ -1,60 +1,59 @@
+import { NextRequest, NextResponse } from "next/server";
 import { sbAdmin } from "@/lib/supabase-admin";
-import { NextRequest } from "next/server";
 
-export const runtime="nodejs"; export const dynamic="force-dynamic"; export const revalidate=0;
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const s = sbAdmin();
     const formData = await request.formData();
     const file = formData.get("file") as File;
-    const brandId = formData.get("brandId") as string;
-    const type = formData.get("type") as string; // "avatar" or "cover"
+    const folder = formData.get("folder") as string || "brand-assets";
 
-    console.log('Brand assets upload request:', { 
-      hasFile: !!file, 
-      brandId, 
-      type, 
-      fileName: file?.name,
-      fileSize: file?.size 
-    });
-
-    if (!file || !brandId || !type) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), { 
-        status: 400,
-        headers: { "content-type": "application/json" }
-      });
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${brandId}/${type}.${fileExt}`;
-    const filePath = fileName; // Remove duplicate brand-assets prefix
 
-    const { error: uploadError } = await s.storage
+    // Dosya boyutu kontrolü (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "File too large" }, { status: 400 });
+    }
+
+    // Dosya tipi kontrolü
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
+    }
+
+    // Dosya adını oluştur
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${file.name}`;
+    const filePath = `${folder}/${fileName}`;
+
+    // Supabase Storage'a yükle
+    const { data, error } = await sbAdmin().storage
       .from("brand-assets")
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: false
+      });
 
-    if (uploadError) throw uploadError;
+    if (error) {
+      console.error("Storage upload error:", error);
+      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    }
 
-    const { data: { publicUrl } } = s.storage
+    // Public URL oluştur
+    const { data: urlData } = sbAdmin().storage
       .from("brand-assets")
       .getPublicUrl(filePath);
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      url: publicUrl,
+    return NextResponse.json({ 
+      url: urlData.publicUrl,
       path: filePath 
-    }), {
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
     });
 
   } catch (error: any) {
-    console.error('Brand assets upload error:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message || 'Upload failed',
-      details: error.toString()
-    }), { 
-      status: 500,
-      headers: { "content-type": "application/json", "cache-control": "no-store" }
-    });
+    console.error("Brand assets upload error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

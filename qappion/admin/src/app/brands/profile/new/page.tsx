@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { jpost, jget } from "@/lib/fetcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import MobileBrandPreview from "@/components/brands/MobileBrandPreview";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { toast } from "sonner";
@@ -138,6 +139,8 @@ function BrandProfileNewPageContent() {
     }
   });
 
+  // Watch form data for preview
+  const watchedData = watch();
   const features = watch("features");
   const logoUrl = watch("logo_url");
   const coverUrl = watch("cover_url");
@@ -357,11 +360,14 @@ function BrandProfileNewPageContent() {
         } catch {}
 
         toast.success("Marka profili oluşturuldu");
-      }
-      
-      if (!isEditMode) {
-        const idToNavigate = newBrandId;
-        router.replace(idToNavigate ? `/brands?newId=${idToNavigate}` : `/brands`);
+        
+        // Toast mesajını gösterdikten sonra yönlendir
+        if (!isEditMode) {
+          // Kısa gecikme ile yönlendir
+          setTimeout(() => {
+            window.location.href = '/brands';
+          }, 1000);
+        }
       }
     } catch (error: any) {
       toast.error(error.message || "Bir hata oluştu");
@@ -384,7 +390,9 @@ function BrandProfileNewPageContent() {
         </p>
       </div>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-6 max-w-2xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Form */}
+        <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-6">
         {/* Marka Adı */}
         <div>
           <label className="block text-sm font-medium mb-2">Marka Adı *</label>
@@ -689,6 +697,40 @@ function BrandProfileNewPageContent() {
           </Button>
         </div>
       </form>
+      
+      {/* Mobile Preview */}
+      <div className="card p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">Mobil Önizleme</h3>
+          <p className="text-sm text-slate-600">Marka profilinizin mobil uygulamada nasıl görüneceğini buradan kontrol edebilirsiniz.</p>
+        </div>
+        <div className="flex justify-center">
+          <MobileBrandPreview formData={{
+            brand_name: watchedData.brand_name || "",
+            display_name: watchedData.display_name || "",
+            email: watchedData.email || "",
+            phone: watchedData.phone || "",
+            website: watchedData.website || "",
+            category: watchedData.category || "",
+            description: watchedData.description || "",
+            social_instagram: watchedData.social_instagram || "",
+            social_twitter: watchedData.social_twitter || "",
+            social_facebook: watchedData.social_facebook || "",
+            social_linkedin: watchedData.social_linkedin || "",
+            logo_url: watchedData.logo_url || "",
+            cover_url: watchedData.cover_url || "",
+            license_plan: watchedData.license_plan || "freemium",
+            features: watchedData.features || {
+              task_creation: false,
+              user_management: false,
+              analytics: false,
+              api_access: false,
+              priority_support: false
+            }
+          }} />
+        </div>
+      </div>
+    </div>
     </div>
   );
 }

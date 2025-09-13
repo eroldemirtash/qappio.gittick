@@ -29,14 +29,12 @@ export async function PATCH(
     if (published !== undefined) updateData.published = published;
     if (is_qappio_of_week !== undefined) updateData.is_qappio_of_week = is_qappio_of_week;
     if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.brief = description; // brief alanına kaydet
-    if (brief !== undefined) updateData.brief = brief;
-    if (reward_qp !== undefined) updateData.reward_qp = reward_qp;
+    if (description !== undefined) updateData.description = description;
+    if (brief !== undefined) updateData.description = brief;
+    if (reward_qp !== undefined) updateData.qp_reward = reward_qp;
     if (starts_at !== undefined) updateData.starts_at = starts_at;
     if (ends_at !== undefined) updateData.ends_at = ends_at;
     if (cover_url !== undefined) updateData.cover_url = cover_url;
-    if (is_sponsored !== undefined) updateData.is_sponsored = is_sponsored;
-    if (sponsor_brand_id !== undefined) updateData.sponsor_brand_id = sponsor_brand_id;
     if (body.is_active !== undefined) updateData.is_active = body.is_active;
 
     const { data, error } = await s

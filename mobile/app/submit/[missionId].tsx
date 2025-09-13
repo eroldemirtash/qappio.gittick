@@ -42,9 +42,9 @@ export default function SubmitScreen() {
       const { data, error } = await supabase
         .from('missions')
         .select(`
-          id, title, description, reward_qp, cover_url,
+          id, title, description, qp_reward, cover_url, brand_id,
           brands!missions_brand_id_fkey (
-            id, name, brand_profiles (logo_url)
+            id, name, brand_profiles (avatar_url)
           )
         `)
         .eq('id', missionId)

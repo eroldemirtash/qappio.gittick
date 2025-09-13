@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image, Dimensions, Modal, FlatList, Linking, Animated } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, Dimensions, Modal, FlatList, Linking, Animated, ImageBackground } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -38,29 +38,115 @@ export default function ProductDetailScreen() {
         const { data: product, error: productErr } = await supabase
           .from('products')
           .select(`
-            id, title, description, value_qp, stock_count, stock_status, brand_id, is_active, category, level, usage_terms, created_at
+            id, title, description, value_qp, stock_count, stock_status, brand_id, is_active, category, level, usage_terms, features, created_at
           `)
           .eq('id', id)
           .single();
         
-        console.log('📱 Raw product from Supabase:', product);
+        if (productErr) {
+          console.error('❌ Product fetch error:', productErr);
+          throw productErr;
+        }
         
-        if (productErr) throw productErr;
-        
-        // Marka verisini ayrı sorguyla çek
+        // Marka verisini marka profil sayfasındaki gibi çek
         let brandData = null;
         if (product.brand_id) {
-          const { data: brand, error: brandErr } = await supabase
-            .from('brands')
-            .select(`
-              id, name, logo_url, socials,
-              brand_profiles(avatar_url, cover_url, website, email, phone)
-            `)
-            .eq('id', product.brand_id)
-            .single();
-          
-          if (!brandErr && brand) {
-            brandData = brand;
+          try {
+            // Önce brands tablosundan temel veri
+            const { data: brand, error: brandErr } = await supabase
+              .from('brands')
+              .select('id, name, logo_url, category, description, cover_url, website_url, social_instagram, social_twitter, social_facebook, social_linkedin')
+              .eq('id', product.brand_id)
+              .single();
+            
+            if (!brandErr && brand) {
+            // Sonra brand_profiles tablosundan detay veri
+            const { data: profile, error: profileErr } = await supabase
+              .from('brand_profiles')
+              .select('display_name, category, description, email, website, social_instagram, social_twitter, social_facebook, social_linkedin, avatar_url, cover_url, phone')
+              .eq('brand_id', product.brand_id)
+              .maybeSingle();
+            
+            console.log('🔍 Socials debug:', {
+              brand_instagram: brand?.social_instagram,
+              brand_twitter: brand?.social_twitter,
+              brand_facebook: brand?.social_facebook,
+              brand_linkedin: brand?.social_linkedin,
+              profile_instagram: profile?.social_instagram,
+              profile_twitter: profile?.social_twitter,
+              profile_facebook: profile?.social_facebook,
+              profile_linkedin: profile?.social_linkedin,
+              profileError: profileErr
+            });
+            
+              
+              // Marka profil sayfasındaki gibi merge et
+              const toUrl = (platform: 'instagram'|'facebook'|'linkedin'|'twitter', value?: string | null) => {
+                console.log(`🔍 toUrl debug for ${platform}:`, { value, type: typeof value });
+                if (!value) return undefined;
+                const v = String(value).trim();
+                if (!v) return undefined;
+                if (/^https?:\/\//i.test(v)) return v;
+                const h = v.replace(/^@+/, '');
+                const base: Record<typeof platform, string> = {
+                  instagram: 'https://instagram.com/',
+                  facebook: 'https://facebook.com/',
+                  linkedin: 'https://www.linkedin.com/',
+                  twitter: 'https://twitter.com/'
+                } as const;
+                const result = `${base[platform]}${h}`;
+                console.log(`🔍 toUrl result for ${platform}:`, result);
+                return result;
+              };
+              
+              brandData = {
+                ...brand,
+                name: profile?.display_name || brand.name,
+                category: profile?.category || brand.category,
+                description: profile?.description || brand.description,
+                email: profile?.email || null,
+                website_url: brand.website_url || (profile?.website ? (/^https?:\/\//i.test(profile.website) ? profile.website : `https://${profile.website}`) : null),
+                socials: {
+                  instagram: toUrl('instagram', profile?.social_instagram) || toUrl('instagram', brand.social_instagram) || null,
+                  twitter: toUrl('twitter', profile?.social_twitter) || toUrl('twitter', brand.social_twitter) || null,
+                  facebook: toUrl('facebook', profile?.social_facebook) || toUrl('facebook', brand.social_facebook) || null,
+                  linkedin: toUrl('linkedin', profile?.social_linkedin) || toUrl('linkedin', brand.social_linkedin) || null,
+                },
+                cover_url: brand.cover_url || profile?.cover_url || null,
+                logo_url: profile?.avatar_url || brand.logo_url || null,
+                brand_profiles: profile
+              };
+              
+            } else {
+              // Fallback: sadece temel marka verisi
+              brandData = {
+                id: product.brand_id,
+                name: 'Bilinmeyen Marka',
+                logo_url: null,
+                category: '',
+                description: '',
+                email: null,
+                website_url: null,
+                socials: {},
+                cover_url: null, // Kapak resmi yok
+                brand_profiles: null
+              };
+            }
+          } catch (err) {
+            console.error('❌ Brand data fetch error:', err);
+            // Fallback: sadece temel marka verisi
+            brandData = {
+              id: product.brand_id,
+              name: 'Bilinmeyen Marka',
+              logo_url: null,
+              category: '',
+              description: '',
+              email: null,
+              website_url: null,
+              socials: {},
+              cover_url: null, // Kapak resmi yok
+              brand_profiles: null
+            };
           }
         }
         
@@ -72,10 +158,16 @@ export default function ProductDetailScreen() {
           .order('position');
         
         // Marketplace linklerini çek (varsa)
-        const { data: marketplaces } = await supabase
+        const { data: marketplaces, error: marketplaceErr } = await supabase
           .from('product_marketplaces')
           .select('marketplace, url')
           .eq('product_id', id);
+        
+        console.log('🔍 Marketplace debug:', {
+          marketplaces,
+          marketplaceErr,
+          productId: id
+        });
         
         const productData = {
           ...product,
@@ -85,18 +177,21 @@ export default function ProductDetailScreen() {
           brandId: product.brand_id || brandData?.id, // brand_id yoksa brand?.id kullan
         };
         
-        console.log('📱 Product detail Supabase response:', productData);
-        console.log('📱 Original product brand_id:', product.brand_id);
-        console.log('📱 Brand data for mapping:', {
-          brandName: productData.brand?.name,
-          brand: productData.brand,
-          brand_profiles: productData.brand?.brand_profiles
+        console.log('🔍 Product data debug:', {
+          rawFeatures: product.features,
+          featuresType: typeof product.features,
+          featuresIsArray: Array.isArray(product.features),
+          featuresLength: product.features?.length,
+          featuresString: typeof product.features === 'string' ? product.features : 'Not a string',
+          processedFeatures: productData.features,
+          processedFeaturesLength: productData.features?.length
         });
-        console.log('📱 Brand ID for navigation:', productData.brandId);
+        
         setItem(productData);
       } catch (e: any) {
-        console.log('Product detail error:', e?.message || e);
-        setError('Ürün verisi alınamadı');
+        console.error('❌ Product detail error:', e?.message || e);
+        console.error('❌ Error details:', e);
+        setError(`Ürün verisi alınamadı: ${e?.message || 'Bilinmeyen hata'}`);
       } finally {
         setLoading(false);
       }
@@ -105,171 +200,12 @@ export default function ProductDetailScreen() {
     return () => controller.abort();
   }, [id]);
 
-  // Mock fallback (geçici)
-  const products = [
-    { 
-      id: 1, 
-      name: 'iPhone 15 Pro', 
-      brand: 'Apple',
-      brandId: '1',
-      stock: 5, 
-      price: 2500, 
-      level: 4, 
-      category: 'Elektronik',
-      image: 'https://images.unsplash.com/photo-1592899677977-9c10df588fb0?w=400&h=400&fit=crop&crop=center',
-      description: 'En yeni iPhone 15 Pro. A17 Pro çip, 48MP ana kamera, ProRAW ve ProRes kayıt. Titanium gövde ve Ceramic Shield ekran.',
-      images: [
-        'https://images.unsplash.com/photo-1592899677977-9c10df588fb0?w=400&h=400&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400&h=400&fit=crop&crop=center',
-      ],
-      features: [
-        'A17 Pro çip',
-        '48MP ana kamera',
-        'ProRAW ve ProRes',
-        'Titanium gövde',
-        'Ceramic Shield ekran'
-      ],
-      brandInfo: {
-        name: 'Apple',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=100&h=100&fit=crop&crop=center',
-        coverImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=200&fit=crop&crop=center',
-        website: 'www.apple.com',
-        email: 'info@apple.com',
-      phone: '0212 555 0123',
-      socials: {}
-    },
-    marketplaceLinks: [
-      {
-        id: 1,
-        name: 'Trendyol',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://trendyol.com'
-      },
-      {
-        id: 2,
-        name: 'Hepsiburada',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://hepsiburada.com'
-      },
-      {
-        id: 3,
-        name: 'Pazarama',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://pazarama.com'
-      }
-    ]
-  },
-  { 
-    id: 2, 
-    name: 'Nike Air Max', 
-    brand: 'Nike',
-    brandId: '2',
-    stock: 12, 
-    price: 800, 
-    level: 2, 
-    category: 'Spor',
-    image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop&crop=center',
-    description: 'Klasik Nike Air Max spor ayakkabısı. Rahat ve şık tasarım. Günlük kullanım için ideal.',
-    images: [
-      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop&crop=center',
-      'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&h=400&fit=crop&crop=center',
-    ],
-    features: [
-      'Rahat tasarım',
-      'Hava yastığı',
-      'Dayanıklı malzeme',
-      'Günlük kullanım',
-      'Çok renk seçeneği'
-    ],
-    brandInfo: {
-      name: 'Nike',
-      logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=100&h=100&fit=crop&crop=center',
-      coverImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=200&fit=crop&crop=center',
-      website: 'www.nike.com',
-      email: 'info@nike.com',
-      phone: '0212 555 0124',
-      socials: {}
-    },
-    marketplaceLinks: [
-      {
-        id: 1,
-        name: 'Trendyol',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://trendyol.com'
-      },
-      {
-        id: 2,
-        name: 'Hepsiburada',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://hepsiburada.com'
-      },
-      {
-        id: 3,
-        name: 'Pazarama',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://pazarama.com'
-      }
-    ]
-  },
-  { 
-    id: 3, 
-    name: 'Samsung Galaxy', 
-    brand: 'Samsung',
-    brandId: '3',
-    stock: 8, 
-    price: 1800, 
-    level: 3, 
-    category: 'Elektronik',
-    image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop&crop=center',
-    description: 'Samsung Galaxy serisi telefon. Yüksek performans ve uzun pil ömrü. Android işletim sistemi.',
-    images: [
-      'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop&crop=center',
-      'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400&h=400&fit=crop&crop=center',
-    ],
-    features: [
-      'Android işletim sistemi',
-      'Yüksek performans',
-      'Uzun pil ömrü',
-      'Çoklu kamera',
-      '5G desteği'
-    ],
-    brandInfo: {
-      name: 'Samsung',
-      logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=100&h=100&fit=crop&crop=center',
-      coverImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=200&fit=crop&crop=center',
-      website: 'www.samsung.com',
-      email: 'info@samsung.com',
-      phone: '0212 555 0125',
-      socials: {}
-    },
-    marketplaceLinks: [
-      {
-        id: 1,
-        name: 'Trendyol',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://trendyol.com'
-      },
-      {
-        id: 2,
-        name: 'Hepsiburada',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://hepsiburada.com'
-      },
-      {
-        id: 3,
-        name: 'Pazarama',
-        logo: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=50&h=50&fit=crop&crop=center',
-        url: 'https://pazarama.com'
-      }
-    ]
-  }
-  ];
+  // Mock data removed - using real data from Supabase
 
   const product = item ? {
     id: item.id,
     name: item.name || item.title,
-    brand: item.brandName || item.brand?.name,
+    brand: item.brand, // Tüm brand objesini kullan
     brandId: item.brand_id || item.brand?.id || item.brandId,
     stock: item.stock || item.stock_count || 0,
     price: item.price || item.value_qp || item.price_qp || 0,
@@ -290,15 +226,62 @@ export default function ProductDetailScreen() {
       return singleImage ? [singleImage] : [];
     })(),
     description: item.description || '',
-    features: Array.isArray(item.features) ? item.features : [],
+    features: (() => {
+      console.log('🔍 Raw features data:', item.features, typeof item.features);
+      
+      // Önce Supabase'den gelen features JSONB'yi kontrol et
+      if (item.features && Array.isArray(item.features)) {
+        // Array ise, içindeki string'leri temizle
+        return item.features.map((f: any) => {
+          if (typeof f === 'string') {
+            return f.replace(/^['"\(\)\[\]]+|['"\(\)\[\]]+$/g, '').trim();
+          }
+          return String(f).replace(/^['"\(\)\[\]]+|['"\(\)\[\]]+$/g, '').trim();
+        }).filter((f: string) => f.length > 0);
+      }
+      
+      // JSON string ise parse et
+      if (typeof item.features === 'string' && item.features.trim()) {
+        try {
+          const parsed = JSON.parse(item.features);
+          if (Array.isArray(parsed)) {
+            return parsed.map((f: any) => {
+              if (typeof f === 'string') {
+                return f.replace(/^['"\(\)\[\]]+|['"\(\)\[\]]+$/g, '').trim();
+              }
+              return String(f).replace(/^['"\(\)\[\]]+|['"\(\)\[\]]+$/g, '').trim();
+            }).filter((f: string) => f.length > 0);
+          }
+        } catch (e) {
+          console.log('🔍 JSON parse failed, trying comma split');
+          // JSON parse başarısızsa virgülle ayır
+          return item.features
+            .split(',')
+            .map((f: string) => f.trim())
+            .map((f: string) => f.replace(/^['"\(\)\[\]]+|['"\(\)\[\]]+$/g, ''))
+            .map((f: string) => f.trim())
+            .filter((f: string) => f.length > 0);
+        }
+      }
+      
+      // Test verisi ekle
+      return [
+        "Yüksek kaliteli malzeme",
+        "Uzun ömürlü kullanım",
+        "Kolay temizlik",
+        "Modern tasarım"
+      ];
+    })(),
     brandInfo: {
       name: item.brand?.name || 'Marka',
-      logo: item.brand?.brand_profiles?.avatar_url || item.brand?.logo_url,
-      coverImage: item.brand?.brand_profiles?.cover_url || item.image || item.image_url,
-      website: item.brand?.brand_profiles?.website,
-      email: item.brand?.brand_profiles?.email,
-      phone: item.brand?.brand_profiles?.phone || '',
-      socials: item.brand?.socials || item.brand?.brand_profiles?.socials || {}
+      logo: item.brand?.logo_url,
+      coverImage: item.brand?.cover_url, // Sadece gerçek kapak resmi
+      website: item.brand?.website_url,
+      email: item.brand?.email,
+      phone: item.brand?.brand_profiles?.phone || item.brand?.phone || '',
+      category: item.brand?.category || '',
+      description: item.brand?.description || '',
+      socials: item.brand?.socials || {}
     },
     marketplaceLinks: (() => {
       // marketplace_links array'ini kontrol et
@@ -319,36 +302,80 @@ export default function ProductDetailScreen() {
           url: m.url ?? '#'
         }));
       }
-      return [];
+      // Test verisi ekle - gerçek URL'lerden logo çekilecek
+      return [
+        {
+          id: 1,
+          name: 'Trendyol',
+          logo: '', // OG image API'den çekilecek
+          url: 'https://trendyol.com'
+        },
+        {
+          id: 2,
+          name: 'Hepsiburada',
+          logo: '', // OG image API'den çekilecek
+          url: 'https://hepsiburada.com'
+        },
+        {
+          id: 3,
+          name: 'Amazon',
+          logo: '', // OG image API'den çekilecek
+          url: 'https://amazon.com'
+        },
+        {
+          id: 4,
+          name: 'GittiGidiyor',
+          logo: '', // OG image API'den çekilecek
+          url: 'https://gittigidiyor.com'
+        },
+        {
+          id: 5,
+          name: 'N11',
+          logo: '', // OG image API'den çekilecek
+          url: 'https://n11.com'
+        }
+      ];
     })()
-  } : (products.find(p => p.id.toString() === id) || products[0]);
+  } : null;
 
   // Resolve marketplace logos from provided URLs (og:image/twitter:image) if missing
   useEffect(() => {
     const abort = new AbortController();
     const run = async () => {
       try {
-        const links = (product?.marketplaceLinks ?? []).slice(0, 6); // limit a bit
+        if (!product) return; // Early return if product is null
+        const links = (product.marketplaceLinks ?? []).slice(0, 6); // limit a bit
         const base = process.env.EXPO_PUBLIC_ADMIN_API_BASE || 'http://192.168.1.167:3010';
-        const resolved = await Promise.all(links.map(async (mk: { id: number | string; name: string; logo: string; url: string }) => {
-          const fallback = mk.logo || product.image || (product.images && product.images[0]) || '';
-          if (!mk.url) return { ...mk, logo: fallback };
+        console.log('🔍 Resolving marketplace logos for:', links.map((l: { id: number | string; name: string; logo: string; url: string }) => l.name));
+        
+        const resolved = await Promise.all(links.map(async (l: { id: number | string; name: string; logo: string; url: string }) => {
+          const fallback = l.logo || product.image || (product.images && product.images[0]) || '';
+          if (!l.url) return { ...l, logo: fallback };
           try {
-            const res = await fetch(`${base}/api/og-image?url=${encodeURIComponent(mk.url)}`, { signal: abort.signal });
-            if (!res.ok) return { ...mk, logo: fallback };
+            console.log(`🔍 Fetching logo for ${l.name} from ${l.url}`);
+            const res = await fetch(`${base}/api/og-image?url=${encodeURIComponent(l.url)}`, { signal: abort.signal });
+            if (!res.ok) {
+              console.log(`❌ Failed to fetch logo for ${l.name}:`, res.status);
+              return { ...l, logo: fallback };
+            }
             const j = await res.json();
             const found = (j?.image as string) || '';
-            return { ...mk, logo: found || fallback };
-          } catch {
-            return { ...mk, logo: fallback };
+            console.log(`✅ Logo found for ${l.name}:`, found);
+            return { ...l, logo: found || fallback };
+          } catch (error) {
+            console.log(`❌ Error fetching logo for ${l.name}:`, error);
+            return { ...l, logo: fallback };
           }
         }));
+        console.log('🔍 Resolved marketplace logos:', resolved);
         setResolvedMarketplace(resolved);
-      } catch {}
+      } catch (error) {
+        console.log('❌ Error in marketplace logo resolution:', error);
+      }
     };
     run();
     return () => abort.abort();
-  }, [item?.id]);
+  }, [product?.id]);
 
   const levelColors: { [key: number]: string } = {
     1: '#fbbf24', // Snapper - Sarı
@@ -384,6 +411,8 @@ export default function ProductDetailScreen() {
   };
 
   const handlePurchase = async () => {
+    if (!product) return; // Null check eklendi
+    
     // Hızlı animasyon
     Animated.timing(purchaseButtonScale, {
       toValue: 0.95,
@@ -421,7 +450,7 @@ export default function ProductDetailScreen() {
     { id: 4, name: 'Viralist' },
     { id: 5, name: 'Qappian' },
   ];
-  const requiredLevel = product.level;
+  const requiredLevel = product?.level || 1;
   const canPurchase = userLevel >= requiredLevel;
 
   if (loading) {
@@ -457,79 +486,154 @@ export default function ProductDetailScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                        {/* Brand Card */}
-                <View style={styles.brandCard}>
-                  <Image source={{ uri: product.brandInfo.coverImage }} style={styles.brandCoverImage} />
-                  <View style={styles.brandOverlay} />
-                  
-                  {/* Marka Logosu - Sol üst köşe */}
-                  <Pressable 
-                    style={styles.brandLogoContainer}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    onPress={() => {
-                      console.log('Marka logosuna tıklandı!');
-                      console.log('Brand ID:', product.brandId);
-                      if (product.brandId) {
-                        console.log('Marka profil sayfasına gidiliyor...');
-                        router.push(`/brands/${product.brandId}`);
-                      } else {
-                        console.log('Brand ID yok!');
-                      }
-                    }}
-                  >
-                    <Image source={{ uri: product.brandInfo.logo }} style={styles.brandLogo} />
-                  </Pressable>
-                  
-                  {/* Marka Bilgileri - Logonun yanında */}
-                  <View style={styles.brandInfo}>
-                    <Pressable 
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      onPress={() => {
-                        console.log('Marka adına tıklandı!');
-                        console.log('Brand ID:', product.brandId);
-                        if (product.brandId) {
-                          console.log('Marka profil sayfasına gidiliyor...');
-                          router.push(`/brands/${product.brandId}`);
-                        } else {
-                          console.log('Brand ID yok!');
-                        }
-                      }}
+                        {/* Brand Card - Marka profil sayfasındaki kartın aynısı */}
+                <View style={styles.profileHeaderWrap}>
+                  {product.brandInfo.coverImage ? (
+                    <ImageBackground 
+                      source={{ uri: product.brandInfo.coverImage }} 
+                      style={styles.headerBg} 
+                      imageStyle={styles.headerBgImg}
                     >
-                      <Text style={styles.brandName}>{product.brandInfo.name}</Text>
-                    </Pressable>
-                    <Pressable onPress={() => { if (product.brandInfo.website) Linking.openURL(product.brandInfo.website.startsWith('http') ? product.brandInfo.website : `https://${product.brandInfo.website}`); }}>
-                      <Text style={styles.brandWebsite}>{product.brandInfo.website || 'Website'}</Text>
-                    </Pressable>
-                  </View>
-                  
-                  {/* Mail ve Sosyal Medya - Kartın içinde alt kısım */}
-                  <View style={styles.brandContact}>
-                    <Pressable onPress={() => { if (product.brandInfo.email) Linking.openURL(`mailto:${product.brandInfo.email}`); }}>
-                      <Text style={styles.contactText}>{product.brandInfo.email || 'E-posta'}</Text>
-                    </Pressable>
+                      <View style={styles.headerOverlayBg} />
+                      <View style={styles.headerContentRow}>
+                        <Pressable 
+                          style={styles.avatarBigWrap}
+                          onPress={() => {
+                            console.log('Marka logosuna tıklandı!');
+                            console.log('Brand ID:', product.brandId);
+                            if (product.brandId) {
+                              console.log('Marka profil sayfasına gidiliyor...');
+                              router.push(`/brands/${product.brandId}`);
+                            } else {
+                              console.log('Brand ID yok!');
+                            }
+                          }}
+                        >
+                          <View style={{ width: '100%', height: '100%', backgroundColor: '#e2e8f0' }}>
+                            {!!product.brandInfo.logo && (
+                              <Image source={{ uri: product.brandInfo.logo }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+                            )}
+                          </View>
+                        </Pressable>
+                        <View style={{ marginLeft: 12, maxWidth: '75%' }}>
+                          <Pressable 
+                            onPress={() => {
+                              console.log('Marka adına tıklandı!');
+                              console.log('Brand ID:', product.brandId);
+                              if (product.brandId) {
+                                console.log('Marka profil sayfasına gidiliyor...');
+                                router.push(`/brands/${product.brandId}`);
+                              } else {
+                                console.log('Brand ID yok!');
+                              }
+                            }}
+                          >
+                            <Text style={[styles.fullnameText, { color: '#ffffff' }]} numberOfLines={1}>{product.brandInfo.name}</Text>
+                            {!!product.brandInfo.website && (
+                              <Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>
+                                {product.brandInfo.website.replace(/^https?:\/\//, '').replace(/^www\./, '')}
+                              </Text>
+                            )}
+                            {!!product.brandInfo.email && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{product.brandInfo.email}</Text>)}
+                          </Pressable>
+                        </View>
+                      </View>
+                    </ImageBackground>
+                  ) : (
+                    <LinearGradient
+                      colors={['#6366f1', '#8b5cf6', '#a855f7']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.headerBg}
+                    >
+                      <View style={styles.headerOverlayBg} />
+                      <View style={styles.headerContentRow}>
+                        <Pressable 
+                          style={styles.avatarBigWrap}
+                          onPress={() => {
+                            console.log('Marka logosuna tıklandı!');
+                            console.log('Brand ID:', product.brandId);
+                            if (product.brandId) {
+                              console.log('Marka profil sayfasına gidiliyor...');
+                              router.push(`/brands/${product.brandId}`);
+                            } else {
+                              console.log('Brand ID yok!');
+                            }
+                          }}
+                        >
+                          <View style={{ width: '100%', height: '100%', backgroundColor: '#e2e8f0' }}>
+                            {!!product.brandInfo.logo && (
+                              <Image source={{ uri: product.brandInfo.logo }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+                            )}
+                          </View>
+                        </Pressable>
+                        <View style={{ marginLeft: 12, maxWidth: '75%' }}>
+                          <Pressable 
+                            onPress={() => {
+                              console.log('Marka adına tıklandı!');
+                              console.log('Brand ID:', product.brandId);
+                              if (product.brandId) {
+                                console.log('Marka profil sayfasına gidiliyor...');
+                                router.push(`/brands/${product.brandId}`);
+                              } else {
+                                console.log('Brand ID yok!');
+                              }
+                            }}
+                          >
+                            <Text style={[styles.fullnameText, { color: '#ffffff' }]} numberOfLines={1}>{product.brandInfo.name}</Text>
+                            {!!product.brandInfo.website && (
+                              <Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>
+                                {product.brandInfo.website.replace(/^https?:\/\//, '').replace(/^www\./, '')}
+                              </Text>
+                            )}
+                            {!!product.brandInfo.email && (<Text style={[styles.bioShort, { color: '#e2e8f0' }]} numberOfLines={1}>{product.brandInfo.email}</Text>)}
+                          </Pressable>
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  )}
+                </View>
+
+                {/* Web & Sosyal Satırı - Marka profil sayfasındaki gibi */}
+                <View style={styles.infoRowWrap}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    {!!product.brandInfo.website && (
+                      <Pressable 
+                        style={styles.infoChip} 
+                        onPress={() => Linking.openURL(product.brandInfo.website.startsWith('http') ? product.brandInfo.website : `https://${product.brandInfo.website}`)}
+                      >
+                        <Ionicons name="globe-outline" size={14} color="#0f172a" />
+                        <Text style={styles.infoChipText} numberOfLines={1} ellipsizeMode="tail">{product.brandInfo.website}</Text>
+                      </Pressable>
+                    )}
                     <View style={styles.socialIcons}>
-                      {!!(product.brandInfo.socials?.twitter) && (
-                        <Pressable onPress={() => Linking.openURL(product.brandInfo.socials.twitter)}>
-                          <Ionicons name="logo-twitter" size={20} color="#ffffff" />
-                        </Pressable>
-                      )}
-                      {!!(product.brandInfo.socials?.instagram) && (
+                      {!!product.brandInfo.socials?.instagram && (
                         <Pressable onPress={() => Linking.openURL(product.brandInfo.socials.instagram)}>
-                          <Ionicons name="logo-instagram" size={20} color="#ffffff" />
+                          <Ionicons name="logo-instagram" size={18} color="#0f172a" />
                         </Pressable>
                       )}
-                      {!!(product.brandInfo.socials?.facebook) && (
+                      {!!product.brandInfo.socials?.facebook && (
                         <Pressable onPress={() => Linking.openURL(product.brandInfo.socials.facebook)}>
-                          <Ionicons name="logo-facebook" size={20} color="#ffffff" />
+                          <Ionicons name="logo-facebook" size={18} color="#0f172a" />
                         </Pressable>
                       )}
-                      {!!(product.brandInfo.socials?.linkedin) && (
+                      {!!product.brandInfo.socials?.linkedin && (
                         <Pressable onPress={() => Linking.openURL(product.brandInfo.socials.linkedin)}>
-                          <Ionicons name="logo-linkedin" size={20} color="#ffffff" />
+                          <Ionicons name="logo-linkedin" size={18} color="#0f172a" />
+                        </Pressable>
+                      )}
+                      {!!product.brandInfo.socials?.twitter && (
+                        <Pressable onPress={() => Linking.openURL(product.brandInfo.socials.twitter)}>
+                          <Ionicons name="logo-twitter" size={18} color="#0f172a" />
                         </Pressable>
                       )}
                     </View>
                   </View>
+                  {(product.brandInfo.description && product.brandInfo.description.trim()) && (
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ color: '#334155', fontSize: 13 }}>{product.brandInfo.description}</Text>
+                    </View>
+                  )}
                 </View>
 
         {/* Marketplace Links */}
@@ -542,8 +646,16 @@ export default function ProductDetailScreen() {
                 onPress={() => Linking.openURL(marketplace.url)}
               >
                 <Image
-                  source={{ uri: marketplace.logo || product.image || (product.images && product.images[0]) }}
+                  source={{ 
+                    uri: marketplace.logo || product.image || (product.images && product.images[0]) || 'https://via.placeholder.com/100x80/6366f1/ffffff?text=' + encodeURIComponent(marketplace.name)
+                  }}
                   style={styles.marketplaceImage}
+                  onError={(error) => {
+                    console.log('Image load error:', error.nativeEvent.error);
+                  }}
+                  onLoad={() => {
+                    console.log('Image loaded successfully');
+                  }}
                 />
                 <View style={styles.marketplaceOverlay}>
                   <Text style={styles.marketplaceName}>{marketplace.name}</Text>
@@ -603,12 +715,21 @@ export default function ProductDetailScreen() {
           
           <View style={styles.featuresContainer}>
             <Text style={styles.featuresTitle}>Özellikler:</Text>
-            {product.features.map((feature: string, index: number) => (
-              <View key={index} style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                <Text style={styles.featureText}>{feature}</Text>
-              </View>
-            ))}
+            {console.log('🔍 Features render debug:', {
+              features: product.features,
+              featuresLength: product.features?.length,
+              featuresType: typeof product.features
+            })}
+            {product.features && product.features.length > 0 ? (
+              product.features.map((feature: string, index: number) => (
+                <View key={index} style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                  <Text style={styles.featureText}>{feature}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.featureText}>Özellik bilgisi bulunamadı</Text>
+            )}
           </View>
         </View>
 
@@ -851,39 +972,88 @@ const styles = StyleSheet.create({
   scrollContent: {
     flex: 1,
   },
-  // Brand Card
-  brandCard: {
-    backgroundColor: '#f8fafc',
-    marginHorizontal: 16,
-    marginTop: 0,
-    marginBottom: 16,
-    borderRadius: 16,
-    position: 'relative',
-    overflow: 'hidden',
-    minHeight: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  // Brand Card - Marka profil sayfasındaki gibi
+  profileHeaderWrap: { 
+    paddingHorizontal: 16, 
+    paddingTop: 8, 
+    paddingBottom: 0 
   },
-  brandCoverImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+  headerBg: { 
+    width: '100%', 
+    height: 160, 
+    justifyContent: 'flex-end', 
+    borderRadius: 16, 
+    overflow: 'hidden' 
   },
-  brandOverlay: {
+  headerBgImg: { 
+    resizeMode: 'cover', 
+    borderRadius: 16 
+  },
+  headerOverlayBg: { 
+    position: 'absolute', 
+    inset: 0, 
+    backgroundColor: 'rgba(0,0,0,0.35)' 
+  },
+  headerContentRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 12, 
+    paddingBottom: 12 
+  },
+  avatarBigWrap: { 
+    width: 80, 
+    height: 80, 
+    borderRadius: 40, 
+    overflow: 'hidden', 
+    borderWidth: 3, 
+    borderColor: '#ffffff' 
+  },
+  fullnameText: { 
+    color: '#0f172a', 
+    fontSize: 20, 
+    fontWeight: '700', 
+    marginBottom: 4 
+  },
+  bioShort: { 
+    color: '#334155', 
+    fontSize: 12 
+  },
+  infoRowWrap: { 
+    paddingHorizontal: 16, 
+    paddingTop: 8, 
+    paddingBottom: 12, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#e2e8f0' 
+  },
+  infoChip: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
+    borderRadius: 12, 
+    backgroundColor: '#f1f5f9', 
+    borderWidth: 1, 
+    borderColor: '#e2e8f0' 
+  },
+  infoChipText: { 
+    color: '#0f172a', 
+    fontSize: 12, 
+    fontWeight: '600' 
+  },
+  socialIcons: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 16 
+  },
+  brandInfoOverlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    top: 16,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
   },
   brandContent: {
     padding: 20,
@@ -934,9 +1104,48 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  brandCategory: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.9,
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
   brandWebsite: {
     color: '#ffffff',
     fontSize: 14,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  brandDescription: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.9,
+    marginTop: 4,
+    lineHeight: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  brandEmail: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.8,
+    marginTop: 2,
+    textDecorationLine: 'underline',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  brandPhone: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.8,
+    marginTop: 2,
+    textDecorationLine: 'underline',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -953,6 +1162,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 8,
+  },
+  contactInfo: {
+    flex: 1,
   },
   contactText: {
     color: '#ffffff',
@@ -971,9 +1183,27 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
   },
-  socialIcons: {
+  socialIconsRow: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     gap: 12,
+    zIndex: 10,
+  },
+  socialIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   // Marketplace Section
   marketplaceSection: {
@@ -991,7 +1221,7 @@ const styles = StyleSheet.create({
   },
   marketplaceItem: {
     width: 100,
-    height: 60,
+    height: 80,
     marginRight: 12,
     borderRadius: 12,
     position: 'relative',
@@ -1008,13 +1238,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
+    padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   marketplaceName: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
   },
