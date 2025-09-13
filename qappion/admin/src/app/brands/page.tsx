@@ -76,70 +76,18 @@ function BrandsPageContent() {
   };
 
   useEffect(() => {
-    fetchBrands().then(() => {
-      // Pull optimistic brand if exists
-      try {
-        const raw = window.localStorage.getItem("lastCreatedBrand");
-        if (raw) {
-          const b = JSON.parse(raw);
-          setBrands(prev => {
-            const exists = prev.some(x => x.id === b.id);
-            return exists ? prev : [b, ...prev];
-          });
-          window.localStorage.removeItem("lastCreatedBrand");
-        }
-        // Merge queued created brands
-        const qRaw = window.localStorage.getItem("createdBrandsQueue");
-        const q = Array.isArray(JSON.parse(qRaw || "null")) ? JSON.parse(qRaw || "[]") : [];
-        if (q.length) {
-          setBrands(prev => {
-            const map = new Map(prev.map(p => [p.id, p]));
-            for (const nb of q) { if (!map.has(nb.id)) { map.set(nb.id, nb); } }
-            return Array.from(map.values());
-          });
-          window.localStorage.removeItem("createdBrandsQueue");
-        }
-        // Highlight and focus created id if present in URL
-        const newId = searchParams.get("newId");
-        if (newId) {
-          // 1) LocalStorage'da detaylı temp brand varsa onu kullan
-          try {
-            const rawOne = window.localStorage.getItem("lastCreatedBrand");
-            const queueRaw = window.localStorage.getItem("createdBrandsQueue");
-            const queue = Array.isArray(JSON.parse(queueRaw || "null")) ? JSON.parse(queueRaw || "[]") : [];
-            const fromQueue = queue.find((q: any) => String(q.id) === String(newId));
-            const fromOne = rawOne ? JSON.parse(rawOne) : null;
-            const candidate = fromQueue || (fromOne && String(fromOne.id) === String(newId) ? fromOne : null);
-            if (candidate) {
-              setBrands(prev => {
-                const exists = prev.some(b => String(b.id) === String(newId));
-                if (exists) return prev;
-                return [candidate as any, ...prev];
-              });
-            } else {
-              // 2) API'den tek marka çek ve listeye ekle
-              jget<{ item: any }>(`/api/brands/${newId}`).then((res) => {
-                if (res?.item) {
-                  setBrands(prev => {
-                    const exists = prev.some(b => String(b.id) === String(newId));
-                    if (exists) return prev;
-                    return [res.item, ...prev];
-                  });
-                }
-              }).catch(() => {});
-            }
-          } catch {}
+    fetchBrands();
+  }, []);
 
-          // URL'i temizle (newId paramını kaldır)
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.delete("newId");
-            router.replace(url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
-          } catch {}
-        }
-      } catch {}
-    });
-  }, [searchParams]);
+  // Sayfa focus olduğunda markaları yenile
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchBrands();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
 
   const handleToggleActive = async (brand: Brand) => {
     try {
@@ -163,7 +111,7 @@ function BrandsPageContent() {
 
   const handleEdit = (brand: Brand) => {
     setIsDetailModalOpen(false);
-    router.push(`/brands/profile/new?edit=${brand.id}`);
+    router.push(`/brands/profile/${brand.id}`);
   };
 
   const handleCloseModal = () => {

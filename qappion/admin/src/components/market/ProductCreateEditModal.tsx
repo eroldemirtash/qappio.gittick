@@ -224,7 +224,9 @@ export function ProductCreateEditModal({ isOpen, onClose, product, onSave }: Pro
       const response = await fetch("/api/brands");
       const data = await response.json();
       if (data.brands) {
+        // Markaları yükle (profil verileri seçim sırasında çekilecek)
         setBrands(data.brands);
+        console.log('🎉 Brands loaded:', data.brands);
       } else {
         // Fallback mock data
         setBrands([
@@ -286,6 +288,9 @@ export function ProductCreateEditModal({ isOpen, onClose, product, onSave }: Pro
   };
 
   const onSubmit = async (data: FormInput) => {
+    console.log('🚀 FORM SUBMIT STARTED!');
+    console.log('🚀 Form data received:', data);
+    
     try {
       setErr(null);
       console.log('🧩 Form data before submit:', data);
@@ -293,11 +298,24 @@ export function ProductCreateEditModal({ isOpen, onClose, product, onSave }: Pro
       console.log('🧩 Gallery length before submit:', data.gallery_images?.length || 0);
 
       // Validation
-      if (!data.brand_id || !data.title) {
-        setErr('Marka ve ürün adı zorunludur');
+      console.log('🔍 Form validation - brand_id:', data.brand_id);
+      console.log('🔍 Form validation - title:', data.title);
+      console.log('🔍 Form validation - all data:', data);
+      
+      if (!data.brand_id) {
+        console.error('❌ VALIDATION FAILED: brand_id is empty');
+        setErr('Marka seçimi zorunludur');
         return;
       }
+      if (!data.title || data.title.trim() === '') {
+        console.error('❌ VALIDATION FAILED: title is empty');
+        setErr('Ürün adı zorunludur');
+        return;
+      }
+      
+      console.log('✅ VALIDATION PASSED - proceeding with FormData creation');
 
+      console.log('📦 Creating FormData...');
       const fd = new FormData();
       if (data.id) fd.append('id', data.id);
       fd.append('brand_id', data.brand_id);
@@ -314,6 +332,10 @@ export function ProductCreateEditModal({ isOpen, onClose, product, onSave }: Pro
       const featuresArray = data.features ? data.features.split(',').map(f => f.trim()).filter(f => f.length > 0) : [];
       fd.append('features', JSON.stringify(featuresArray));
       fd.append('marketplaces', JSON.stringify(data.marketplaces || []));
+      
+      console.log('📦 FormData created with keys:', Array.from(fd.keys()));
+      console.log('📦 FormData brand_id:', fd.get('brand_id'));
+      console.log('📦 FormData title:', fd.get('title'));
 
       // Ana görsel
       if (data.cover_image) {
@@ -327,14 +349,29 @@ export function ProductCreateEditModal({ isOpen, onClose, product, onSave }: Pro
       console.log('📦 FormData cover image:', data.cover_image?.name);
       console.log('📦 FormData gallery images appended:', (data.gallery_images || []).length);
 
+      console.log('🚀 Calling createOrUpdateProductAction...');
       const res = await createOrUpdateProductAction(fd);
-      if (!res?.ok) throw new Error(res?.error || 'Kaydetme başarısız');
+      console.log('📦 Response received:', res);
+      
+      if (!res?.ok) {
+        setErr(res?.error || 'Kaydetme başarısız');
+        return;
+      }
 
-      console.log('✅ Product saved with id:', res.id);
-      onClose(); // modal kapat
-      onSave({}); // parent'ı yenile
+      // başarı
+      if (res.warnings?.length) {
+        console.warn('Product saved with warnings:', res.warnings);
+        // Burada UI tarafında bir toast kullanıyorsan göster:
+        // toast.warning(`Ürün kaydedildi ancak: ${res.warnings.join(', ')}`);
+      }
+
+      try { onClose(); } catch {}
+      try { onSave({}); } catch {}
+
+      setErr(null);
     } catch (e: any) {
       console.error('❌ Product save error:', e?.message || e);
+      console.error('❌ Error details:', e);
       setErr(e?.message || 'Hata');
     }
   };
@@ -464,6 +501,27 @@ export function ProductCreateEditModal({ isOpen, onClose, product, onSave }: Pro
                     onChange={(e) => {
                       const brand = brands.find(b => b.id === e.target.value);
                       setSelectedBrand(brand || null);
+                      
+                      // Marka profil verilerini çek (async olarak)
+                      if (brand) {
+                        fetch(`/api/brands/${brand.id}/profile`)
+                          .then(response => response.json())
+                          .then(profileData => {
+                            if (profileData.success && profileData.profile) {
+                              // Marka profil verilerini brand objesine ekle
+                              const updatedBrand = {
+                                ...brand,
+                                ...profileData.profile,
+                                brand_profiles: profileData.profile
+                              };
+                              setSelectedBrand(updatedBrand);
+                              console.log('🎉 Brand profile data loaded:', updatedBrand);
+                            }
+                          })
+                          .catch(error => {
+                            console.error('❌ Brand profile fetch error:', error);
+                          });
+                      }
                     }}
                   >
                     <option value="">Marka seçin</option>

@@ -1,170 +1,209 @@
 'use server';
 
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { randomUUID } from 'crypto';
-import { revalidatePath } from 'next/cache';
+import { createClient } from '@supabase/supabase-js';
 
-const BUCKET = process.env.PRODUCT_BUCKET || 'product_media'; // varsayılan bucket adı
+type ActionResult =
+  | { ok: true; id: string; warnings?: string[] }
+  | { ok: false; error: string };
 
-async function ensureBucketExists(bucket: string) {
-  try {
-    const { data: meta } = await supabaseAdmin.storage.getBucket(bucket);
-    if (meta) return;
-    // create if not exists
-    await supabaseAdmin.storage.createBucket(bucket, { public: true });
-  } catch (e: any) {
-    // Bazı ortamlarda getBucket hata dönebilir; create dene ve var ise yoksay
-    await supabaseAdmin.storage.createBucket(bucket, { public: true }).catch(() => {});
-  }
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
+
+function sanitizeName(name: string) {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
-export async function createOrUpdateProductAction(form: FormData) {
+async function uploadToStorage(file: File, path: string) {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const { error } = await supabaseAdmin
+    .storage
+    .from('product-images')
+    .upload(path, buffer, { contentType: file.type || 'application/octet-stream', upsert: true });
+  if (error) throw new Error(error.message);
+  const { data: pub } = supabaseAdmin.storage.from('product-images').getPublicUrl(path);
+  return pub.publicUrl;
+}
+
+export async function createOrUpdateProductAction(fd: FormData): Promise<ActionResult> {
+  console.time('createOrUpdateProductAction');
+  console.log('🔍 Starting product action with form data');
+  const warnings: string[] = [];
+  let createdId: string | null = null;
+
   try {
-    const idRaw = form.get('id'); // opsiyonel (düzenleme için)
-    const productIdExisting = idRaw ? String(idRaw) : null;
+    // --- Form parse ---
+    const id = (fd.get('id') as string) || '';
+    const brand_id = String(fd.get('brand_id') || '');
+    const title = String(fd.get('title') || '');
+    const description = String(fd.get('description') || '');
+    const usage_terms = String(fd.get('usage_terms') || '');
+    const value_qp = Number(fd.get('value_qp') || 0);
+    const stock_status = String(fd.get('stock_status') || 'in_stock') as 'in_stock'|'low'|'out_of_stock'|'hidden';
+    const stock_count = Number(fd.get('stock_count') || 0);
+    const category = String(fd.get('category') || 'Elektronik');
+    const level = Number(fd.get('level') || 1);
+    const is_active = String(fd.get('is_active') || 'true') === 'true';
 
-    const brand_id     = String(form.get('brand_id') || '');
-    const title        = String(form.get('title') || '');
-    const description  = String(form.get('description') || '');
-    const usage_terms  = String(form.get('usage_terms') || '');
-    const value_qp     = Number(form.get('value_qp') || 0);
-    const stock_status = String(form.get('stock_status') || 'in_stock');
-    const stock_count  = form.get('stock_count') != null ? Number(form.get('stock_count')) : null;
-    const category     = String(form.get('category') || '');
-    const level        = Number(form.get('level') || 1);
-    const is_active    = form.get('is_active') === 'on' || form.get('is_active') === 'true';
+    const levels: number[] = JSON.parse(String(fd.get('levels') || '[]'));
+    const featuresString = String(fd.get('features') || '');
+    const features = featuresString ? featuresString
+      .split(',')
+      .map(f => f.trim())
+      .map(f => f.replace(/^['"\(\)]+|['"\(\)]+$/g, '')) // Başta ve sonda tırnak/parantez temizle
+      .map(f => f.trim()) // Tekrar trim
+      .filter(f => f.length > 0) : [];
+    const marketplaces: { marketplace: string; product_url: string; image_url?: string }[] =
+      JSON.parse(String(fd.get('marketplaces') || '[]'));
 
-    const levels        = JSON.parse(String(form.get('levels') || '[]')) as string[];
-    const marketplaces  = JSON.parse(String(form.get('marketplaces') || '[]')) as any[];
+    const cover_image = (fd.get('cover_image') as File) || null;
+    const gallery_images = (fd.getAll('gallery_images') as File[]) || [];
 
-    if (!brand_id || !title) {
-      return { ok: false, error: 'brand_id ve title zorunludur' };
-    }
+    console.log('🔍 Parsed form data:', {
+      id, brand_id, title, description, usage_terms,
+      value_qp, stock_status, stock_count, category, level, is_active,
+      featuresString, features, marketplaces, 
+      hasCoverImage: !!cover_image, galleryImagesCount: gallery_images.length
+    });
 
-    // Ürün insert/update
-    let productId = productIdExisting;
-    if (!productId) {
-      const { data, error } = await supabaseAdmin
-        .from('products')
-        .insert({
-          brand_id, title, description, usage_terms,
-          value_qp, stock_status, stock_count,
-          category, level,
-          is_active,
-        })
-        .select('id')
-        .single();
-      if (error) throw new Error(error.message);
-      productId = data.id;
-    } else {
+    if (!brand_id || !title) return { ok: false, error: 'Marka ve ürün adı zorunludur' };
+
+    // --- A) Insert / Update (kritik; hata = hard fail) ---
+    console.log('[A] upsert product');
+    let productId = id;
+
+    if (productId) {
+      console.log('🔍 Updating existing product:', productId);
       const { error } = await supabaseAdmin
         .from('products')
         .update({
           brand_id, title, description, usage_terms,
           value_qp, stock_status, stock_count,
-          category, level,
-          is_active,
+          category, level, is_active, features
         })
         .eq('id', productId);
-      if (error) throw new Error(error.message);
-    }
-
-    // Levels replace
-    if (Array.isArray(levels)) {
-      await supabaseAdmin.from('product_levels').delete().eq('product_id', productId);
-      if (levels.length) {
-        const rows = levels.map(l => ({ product_id: productId, level: l }));
-        const { error } = await supabaseAdmin.from('product_levels').insert(rows);
-        if (error) throw new Error(error.message);
+      if (error) {
+        console.error('❌ Update error:', error);
+        throw new Error(error.message);
       }
-    }
-
-    // Marketplaces replace
-    if (Array.isArray(marketplaces)) {
-      await supabaseAdmin.from('product_marketplaces').delete().eq('product_id', productId);
-      if (marketplaces.length) {
-        const rows = marketplaces.map((m: any, idx: number) => ({
-          product_id: productId,
-          marketplace: m.marketplace,
-          product_url: m.product_url,
-          image_url: m.image_url || null,
-          position: idx,
-        }));
-        const { error } = await supabaseAdmin.from('product_marketplaces').insert(rows);
-        if (error) throw new Error(error.message);
+      console.log('✅ Product updated successfully');
+    } else {
+      console.log('🔍 Creating new product');
+      const { data, error } = await supabaseAdmin
+        .from('products')
+        .insert([{
+          brand_id, title, description, usage_terms,
+          value_qp, stock_status, stock_count,
+          category, level, is_active, features
+        }])
+        .select('id')
+        .single();
+      if (error) {
+        console.error('❌ Insert error:', error);
+        throw new Error(error.message);
       }
+      productId = data.id;
+      createdId = productId; // rollback için işaretle
+      console.log('✅ Product created successfully with ID:', productId);
     }
 
-    // Görseller: FormData'dan çek
-    await ensureBucketExists(BUCKET);
-    const coverImage = form.get('cover_image') as File | null;
-    const galleryFiles = form.getAll('gallery_images') as unknown as File[];
-    console.log('ServerAction cover image:', coverImage?.name);
-    console.log('ServerAction gallery images len:', galleryFiles?.length || 0);
+    // --- B) Cover upload (opsiyonel; hata = warning) ---
+    try {
+      if (cover_image) {
+        console.log('[B] cover upload');
+        const coverPath = `products/${productId}/cover_${Date.now()}_${sanitizeName(cover_image.name || 'cover.jpg')}`;
+        const coverUrl = await uploadToStorage(cover_image, coverPath);
 
-    // Sadece yeni görseller varsa eski görselleri temizle (gallery için)
-    const hasNewImages = (coverImage && coverImage.size > 0) || (galleryFiles && galleryFiles.length > 0);
-    if (hasNewImages) {
-      await supabaseAdmin.from('product_images').delete().eq('product_id', productId);
+        const { error: up1 } = await supabaseAdmin
+          .from('products')
+          .update({ cover_url: coverUrl })
+          .eq('id', productId);
+        if (up1) throw new Error(up1.message);
+
+        const { error: up2 } = await supabaseAdmin
+          .from('product_images')
+          .insert([{ product_id: productId, url: coverUrl, position: 0 }]);
+        if (up2) throw new Error(up2.message);
+      }
+    } catch (e: any) {
+      console.warn('[B] cover warning:', e?.message || e);
+      warnings.push('Ana görsel yüklenemedi');
     }
 
-    let position = 0;
-
-    // Ana görsel yükle (position 0)
-    if (coverImage && coverImage.size > 0) {
-      const buf = Buffer.from(await coverImage.arrayBuffer());
-      const ext = (coverImage.name?.split('.').pop() || 'jpg').toLowerCase();
-      const key = `${productId}/cover-${randomUUID()}.${ext}`;
-
-      const { error: upErr } = await supabaseAdmin.storage.from(BUCKET).upload(key, buf, {
-        contentType: coverImage.type || 'image/jpeg',
-        upsert: true,
-      });
-      if (upErr) throw new Error(`Cover upload failed: ${upErr.message}`);
-
-      const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(key);
-      const url = pub.publicUrl;
-
-      const { error: imgErr } = await supabaseAdmin.from('product_images').insert({
-        product_id: productId,
-        url,
-        position: position++,
-        is_cover: true,
-      });
-      if (imgErr) throw new Error(imgErr.message);
+    // --- C) Gallery upload (opsiyonel; hata = warning) ---
+    try {
+      if (gallery_images?.length) {
+        console.log('[C] gallery upload');
+        let order = 1;
+        for (const f of gallery_images) {
+          const path = `products/${productId}/gallery_${order}_${Date.now()}_${sanitizeName(f.name || `img_${order}.jpg`)}`;
+          const url = await uploadToStorage(f, path);
+          const { error } = await supabaseAdmin
+            .from('product_images')
+            .insert([{ product_id: productId, url, position: order }]);
+          if (error) throw new Error(error.message);
+          order += 1;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[C] gallery warning:', e?.message || e);
+      warnings.push('Galeri görselleri yüklenemedi');
     }
 
-    // Galeri görselleri yükle (ilk galeri görseli de cover olabilir; ama cover zaten ayrı yüklendi)
-    for (let i = 0; i < (galleryFiles?.length || 0); i++) {
-      const f = galleryFiles[i];
-      if (!f || (f as any).size === 0) continue;
+    // --- D) Marketplaces (tamamen tazele; hata = warning) ---
+    try {
+      console.log('[D] marketplaces refresh');
+      const { error: delMp } = await supabaseAdmin
+        .from('product_marketplaces')
+        .delete()
+        .eq('product_id', productId);
+      if (delMp) throw new Error(delMp.message);
 
-      const buf = Buffer.from(await f.arrayBuffer());
-      const ext = (f.name?.split('.').pop() || 'jpg').toLowerCase();
-      const key = `${productId}/gallery-${String(i).padStart(2, '0')}-${randomUUID()}.${ext}`;
+      const rows = (marketplaces || [])
+        .filter(m => m?.marketplace && m?.product_url)
+        .map(m => ({ product_id: productId, marketplace: m.marketplace, product_url: m.product_url, image_url: m.image_url || null }));
 
-      const { error: upErr } = await supabaseAdmin.storage.from(BUCKET).upload(key, buf, {
-        contentType: f.type || 'image/jpeg',
-        upsert: true,
-      });
-      if (upErr) throw new Error(`Gallery upload failed: ${upErr.message}`);
-
-      const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(key);
-      const url = pub.publicUrl;
-
-      const { error: imgErr } = await supabaseAdmin.from('product_images').insert({
-        product_id: productId,
-        url,
-        position: position++,
-        is_cover: false,
-      });
-      if (imgErr) throw new Error(imgErr.message);
+      if (rows.length) {
+        const { error: insMp } = await supabaseAdmin.from('product_marketplaces').insert(rows);
+        if (insMp) throw new Error(insMp.message);
+      }
+    } catch (e: any) {
+      console.warn('[D] marketplaces warning:', e?.message || e);
+      warnings.push('Marketplace linkleri kaydedilemedi');
     }
 
-    revalidatePath('/market');
-    return { ok: true, id: productId };
+    // --- E) Levels (opsiyonel; hata = warning) ---
+    try {
+      console.log('[E] levels refresh');
+      const { error: delLv } = await supabaseAdmin.from('product_levels').delete().eq('product_id', productId);
+      if (delLv) throw new Error(delLv.message);
+
+      if (Array.isArray(levels) && levels.length) {
+        const lvRows = levels.map(lv => ({ product_id: productId, level: Number(lv) || 1 }));
+        const { error: insLv } = await supabaseAdmin.from('product_levels').insert(lvRows);
+        if (insLv) throw new Error(insLv.message);
+      }
+    } catch (e: any) {
+      console.warn('[E] levels warning:', e?.message || e);
+      warnings.push('Seviye bilgileri kaydedilemedi');
+    }
+
+    console.timeEnd('createOrUpdateProductAction');
+    return { ok: true, id: productId, warnings: warnings.length ? warnings : undefined };
   } catch (e: any) {
-    console.error('createOrUpdateProductAction error:', e?.message || e);
-    return { ok: false, error: e?.message || 'Internal error' };
+    console.error('❌ product action hard fail:', e?.message || e);
+
+    // Insert sonrası bir yerde patladıysa ürünü geri al (tamamen başarısız say)
+    if (createdId) {
+      try {
+        await supabaseAdmin.from('products').delete().eq('id', createdId);
+      } catch {}
+    }
+
+    console.timeEnd('createOrUpdateProductAction');
+    return { ok: false, error: e?.message || 'Kaydetme başarısız' };
   }
 }

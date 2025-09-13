@@ -1,0 +1,29 @@
+-- Brand_profiles tablosuna eksik kolonları ekle
+-- Bu SQL'i Supabase Studio > SQL Editor'da çalıştır
+
+-- Eksik kolonları ekle
+ALTER TABLE brand_profiles 
+ADD COLUMN IF NOT EXISTS display_name TEXT,
+ADD COLUMN IF NOT EXISTS category TEXT,
+ADD COLUMN IF NOT EXISTS email TEXT,
+ADD COLUMN IF NOT EXISTS phone TEXT,
+ADD COLUMN IF NOT EXISTS website TEXT,
+ADD COLUMN IF NOT EXISTS avatar_url TEXT,
+ADD COLUMN IF NOT EXISTS cover_url TEXT,
+ADD COLUMN IF NOT EXISTS social_instagram TEXT,
+ADD COLUMN IF NOT EXISTS social_twitter TEXT,
+ADD COLUMN IF NOT EXISTS social_facebook TEXT,
+ADD COLUMN IF NOT EXISTS social_linkedin TEXT,
+ADD COLUMN IF NOT EXISTS license_plan TEXT DEFAULT 'freemium',
+ADD COLUMN IF NOT EXISTS license_start TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS license_end TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS license_fee DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS features JSONB DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- Mevcut kolonları güncelle (eğer varsa)
+UPDATE brand_profiles 
+SET display_name = COALESCE(display_name, description),
+    website = COALESCE(website, website_url),
+    avatar_url = COALESCE(avatar_url, logo_url)
+WHERE display_name IS NULL OR website IS NULL OR avatar_url IS NULL;

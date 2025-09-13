@@ -45,35 +45,24 @@ export function MissionCard({
     
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
-    if (days > 0) return `${days}g ${hours}s`;
-    if (hours > 0) return `${hours}s`;
-    
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (days > 0) return `${days}g ${hours}s ${minutes}dk`;
+    if (hours > 0) return `${hours}s ${minutes}dk`;
+    
     return `${minutes}dk`;
   };
 
   const timeRemaining = formatTimeRemaining(mission.ends_at || mission.deadline);
 
-  // Debug: API'den gelen veriyi kontrol et
-  console.log('MissionCard - mission data:', {
-    id: mission.id,
-    title: mission.title,
-    reward_qp: mission.reward_qp,
-    qp_reward: mission.qp_reward,
-    reward_points: mission.reward_points,
-    description: mission.description,
-    starts_at: mission.starts_at,
-    ends_at: mission.ends_at,
-    deadline: mission.deadline,
-    cover_url: mission.cover_url,
-    cover_image: mission.cover_image,
-    brand: mission.brand,
-    brandName: mission.brandName,
-    brandLogo: mission.brandLogo,
-    sponsor_brand: mission.sponsor_brand,
-    has_sponsor: !!mission.sponsor_brand
-  });
+  // QP değerini doğru alandan al
+  const qpValue = mission.qp_reward || mission.reward_qp || 0;
+  
+  // Marka logosunu doğru alandan al
+  const brandLogo = mission.brand?.logo_url || mission.brandLogo || mission.brand?.brand_profiles?.avatar_url;
+  
+  // Haftanın Qappio'su durumunu kontrol et
+  const isQappioOfWeek = mission.is_qappio_of_week || false;
 
   return (
     <div className="card p-6 hover:shadow-lg transition-shadow">
@@ -89,7 +78,7 @@ export function MissionCard({
               (e.currentTarget as HTMLElement).style.display = 'none';
             }}
           />
-          {mission.is_qappio_of_week && (
+          {isQappioOfWeek && (
             <div className="absolute top-3 right-3">
               <div className="flex items-center gap-1 bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-medium">
                 <Star className="h-3 w-3" />
@@ -119,7 +108,7 @@ export function MissionCard({
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <Avatar
-            src={mission.brandLogo || mission.brand?.brand_profiles?.avatar_url}
+            src={brandLogo}
             fallback={(mission.brandName || mission.brand?.name)?.[0] || "M"}
             size="md"
           />
@@ -144,7 +133,7 @@ export function MissionCard({
         </div>
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-white shadow-lg">
-            {mission.reward_qp || 0} QP
+            {qpValue} QP
           </span>
         </div>
       </div>

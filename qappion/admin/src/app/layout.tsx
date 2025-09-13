@@ -1,7 +1,7 @@
 import "./globals.css";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { Home, BadgePercent, Target, Users, ShoppingBag, Trophy, Share2, Bell, CreditCard, Database, Settings } from "lucide-react";
+import { Home, BadgePercent, Target, Users, ShoppingBag, Trophy, Share2, Bell, CreditCard, Database, Settings, Menu } from "lucide-react";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -23,8 +23,8 @@ export default function Root({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
       <body className="body-bg min-h-dvh">
-        <div className="grid grid-cols-[260px_1fr] min-h-dvh">
-          <aside className="text-slate-100 sticky top-0 h-screen overflow-y-auto" style={{background:"var(--sidebar-grad)"}}>
+        <div className="flex min-h-dvh max-w-full">
+          <aside className="text-slate-100 sticky top-0 h-screen overflow-y-auto w-64 hidden md:block flex-shrink-0" style={{background:"var(--sidebar-grad)"}}>
             <div className="px-5 py-6 flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 grid place-items-center text-white text-lg font-bold">Q</div>
               <div className="text-xl font-semibold">Qappio</div>
@@ -40,8 +40,22 @@ export default function Root({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
           </aside>
-          <main className="p-6">
-            {children}
+          <main className="flex-1 p-6 overflow-x-auto">
+            {/* Mobile header */}
+            <div className="md:hidden mb-6 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 grid place-items-center text-white text-sm font-bold">Q</div>
+                  <div className="text-lg font-semibold">Qappio Admin</div>
+                </div>
+                <button className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50">
+                  <Menu className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="max-w-full">
+              {children}
+            </div>
           </main>
         </div>
       </body>

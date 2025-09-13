@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const baseSelect = `
-      id, name, logo_url, is_active, created_at, updated_at,
+      id, name, logo_url, is_active, created_at, updated_at, socials, email, website, category, description, cover_url,
       brand_profiles(*)
     `;
 
@@ -46,7 +46,7 @@ export async function GET() {
     // Fallback to minimal select without relation
     const secondTry = await sbAdmin()
       .from("brands")
-      .select("*")
+      .select("id, name, logo_url, is_active, created_at, updated_at, socials, email, website, category, description, cover_url")
       .order("name", { ascending: true });
 
     if (!secondTry.error) {
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
               website: website ?? null,
               avatar_url: avatar_url ?? data.logo_url ?? null,
               category: category ?? null,
-            }, { onConflict: "brand_id" });
+            }, { onConflict: "brand_id,user_id" });
           if (upsertErr) throw upsertErr;
 
           if (avatar_url) {

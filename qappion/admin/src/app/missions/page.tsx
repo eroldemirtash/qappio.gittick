@@ -43,7 +43,7 @@ export default function MissionsPage() {
         // Simple mapping without complex brand logic
         const mappedMissions = (response.items || []).map(mission => ({
           ...mission,
-          reward_qp: mission.reward_qp ?? 0,
+          reward_qp: mission.qp_reward ?? mission.reward_qp ?? 0,
           published: mission.published ?? false,
           brand: mission.brand || null
         }));

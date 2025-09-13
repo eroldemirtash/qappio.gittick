@@ -141,19 +141,17 @@ export default function QappiolarScreen() {
             title,
             cover_url,
             description,
-            reward_qp,
+            qp_reward,
             starts_at,
             ends_at,
             created_at,
             brand_id,
             is_qappio_of_week,
+            status,
             brands!missions_brand_id_fkey (
               id,
               name,
-              brand_profiles (
-                logo_url,
-                avatar_url
-              )
+              logo_url
             )
           `)
           .order('created_at', { ascending: false })
@@ -170,6 +168,7 @@ export default function QappiolarScreen() {
       
       console.log('✅ REAL SUPABASE MISSIONS DATA:', data);
       console.log('✅ REAL MISSIONS COUNT:', data?.length || 0);
+      console.log('🔍 MISSIONS STATUS VALUES:', data?.map(m => ({ id: m.id, title: m.title, status: m.status })));
       
       if (data && data.length > 0) {
         const mapped = data.map((m: any) => ({
@@ -177,9 +176,9 @@ export default function QappiolarScreen() {
           title: m.title,
           brandId: m.brand_id,
           brand: m.brands?.name || 'Bilinmeyen Marka',
-          brandLogo: m.brands?.brand_profiles?.logo_url || m.brands?.brand_profiles?.avatar_url || 'https://via.placeholder.com/50',
+          brandLogo: m.brands?.logo_url || 'https://via.placeholder.com/50',
           image: m.cover_url || 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=400&fit=crop&crop=center',
-          qpValue: (m.reward_qp ?? 0),
+          qpValue: (m.qp_reward ?? 0),
           timeLeft: formatTimeLeft(m.starts_at, m.ends_at),
           isFeatured: m.is_qappio_of_week || false, // Gerçek değeri kullan
           is_sponsored: false, // Geçici olarak false
@@ -214,27 +213,52 @@ export default function QappiolarScreen() {
   };
 
   const fetchBrands = async () => {
-    console.log('🚀 FETCHING REAL BRANDS FROM SUPABASE (NO MOCK DATA!)');
+    console.log('🚀 FETCHING BRANDS THAT HAVE MISSIONS (NO MOCK DATA!)');
+    
+    // Önce görevlerden unique brand_id'leri al - status kontrolü olmadan
+    const { data: missionsData, error: missionsError } = await supabase
+      .from('missions')
+      .select('brand_id');
+    
+    if (missionsError) {
+      console.error('❌ Supabase missions error for brands:', missionsError);
+      setBrands([]);
+      return;
+    }
+    
+    console.log('📊 MISSIONS DATA FOR BRANDS:', missionsData);
+    
+    // Unique brand_id'leri al
+    const uniqueBrandIds = [...new Set(missionsData?.map(m => m.brand_id).filter(Boolean))];
+    console.log('🎯 UNIQUE BRAND IDS FROM MISSIONS:', uniqueBrandIds);
+    
+    if (uniqueBrandIds.length === 0) {
+      console.log('⚠️ NO BRANDS WITH MISSIONS FOUND');
+      setBrands([]);
+      return;
+    }
+    
+    // Sadece görev veren markaları çek
     const { data, error } = await supabase
       .from('brands')
       .select(`
         id,
         name,
-        brand_profiles(*)
-      `);
+        logo_url
+      `)
+      .in('id', uniqueBrandIds);
     
     if (error) {
       console.error('❌ Supabase brands error:', error);
-      setBrands([]); // Boş liste göster, mock data kullanma!
+      setBrands([]);
       return;
     }
     
-    console.log('✅ REAL SUPABASE BRANDS DATA:', data);
+    console.log('✅ BRANDS WITH MISSIONS DATA:', data);
     
     if (data && data.length > 0) {
       const mapped = data.map((b: any) => {
-        const bp = b.brand_profiles;
-        const logo = bp?.logo_url ?? bp?.avatar_url ?? bp?.image_url ?? 'https://via.placeholder.com/50';
+        const logo = b.logo_url || 'https://via.placeholder.com/50';
         return {
           id: b.id,
           name: b.name,
@@ -242,9 +266,9 @@ export default function QappiolarScreen() {
         };
       });
       setBrands(mapped);
-      console.log('🎉 REAL BRANDS LOADED SUCCESSFULLY - NO MOCK DATA!');
+      console.log('🎉 BRANDS WITH MISSIONS LOADED SUCCESSFULLY!');
     } else {
-      console.log('⚠️ NO BRANDS FOUND - SHOWING EMPTY LIST (NO MOCK!)');
+      console.log('⚠️ NO BRANDS WITH MISSIONS FOUND');
       setBrands([]);
     }
   };
@@ -519,11 +543,13 @@ export default function QappiolarScreen() {
 
         {/* Brands */}
         <View style={styles.section}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.brandsScroll}>
-            {brands.map((brand) => (
-              <BrandItem key={brand.id} brand={brand} />
-            ))}
-          </ScrollView>
+          {brands.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.brandsScroll}>
+              {brands.map((brand) => (
+                <BrandItem key={brand.id} brand={brand} />
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* Search Results or Regular Missions */}
@@ -988,13 +1014,13 @@ const styles = StyleSheet.create({
   },
   brandItem: {
     alignItems: 'center',
-    marginRight: 16,
-    width: 64,
+    marginRight: 12,
+    width: 48,
   },
   brandItemLogo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     resizeMode: 'contain',
   },
   missionsGrid: {
@@ -1205,5 +1231,15 @@ const styles = StyleSheet.create({
   },
   modalButtonTextPrimary: {
     color: '#fff',
+  },
+  emptyBrandsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  emptyBrandsText: {
+    color: '#64748b',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

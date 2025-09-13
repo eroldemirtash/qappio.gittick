@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/Switch";
 import { Combobox } from "@/components/ui/Combobox";
 import { ArrowLeft, Save, Eye, Image, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import MobileMissionPreview from "@/components/missions/MobileMissionPreview";
 
 export default function EditMissionPage() {
   const router = useRouter();
@@ -26,6 +27,20 @@ export default function EditMissionPage() {
   const [brands, setBrands] = useState<any[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
+  
+  // Watch form data for preview
+  const [formData, setFormData] = useState({
+    title: "",
+    brief: "",
+    description: "",
+    cover_url: "",
+    reward_qp: 0,
+    starts_at: "",
+    ends_at: "",
+    brand_id: "",
+    brand_name: "",
+    brand_logo: ""
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,6 +58,20 @@ export default function EditMissionPage() {
           // Use the mission data directly without complex mapping
           console.log('🔍 Setting mission state:', foundMission);
           setMission(foundMission as any);
+          
+          // Update form data for preview
+          setFormData({
+            title: foundMission.title || "",
+            brief: foundMission.brief || "",
+            description: foundMission.description || "",
+            cover_url: foundMission.cover_url || "",
+            reward_qp: foundMission.reward_qp || 0,
+            starts_at: foundMission.starts_at || "",
+            ends_at: foundMission.ends_at || "",
+            brand_id: foundMission.brand_id || "",
+            brand_name: foundMission.brand?.name || "",
+            brand_logo: foundMission.brand?.logo_url || ""
+          });
         } else {
           console.log('❌ Mission not found for ID:', missionId);
           setError("Görev bulunamadı");
@@ -176,9 +205,9 @@ export default function EditMissionPage() {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           <div className="card p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">Temel Bilgiler</h3>
             
@@ -189,7 +218,10 @@ export default function EditMissionPage() {
                 </label>
                 <Input
                   value={mission.title || ""}
-                  onChange={(e) => setMission({ ...mission, title: e.target.value })}
+                  onChange={(e) => {
+                    setMission({ ...mission, title: e.target.value });
+                    setFormData(prev => ({ ...prev, title: e.target.value }));
+                  }}
                   placeholder="Görev başlığını girin"
                 />
               </div>
@@ -205,7 +237,16 @@ export default function EditMissionPage() {
                     avatar: brand.brand_profiles?.avatar_url
                   }))}
                   value={mission.brand_id}
-                  onChange={(value) => setMission({ ...mission, brand_id: value })}
+                  onChange={(value) => {
+                    setMission({ ...mission, brand_id: value });
+                    const selectedBrand = brands.find(b => b.id === value);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      brand_id: value,
+                      brand_name: selectedBrand?.name || "",
+                      brand_logo: selectedBrand?.brand_profiles?.avatar_url || ""
+                    }));
+                  }}
                   placeholder="Marka seçin..."
                   allowCustom={false}
                 />
@@ -216,10 +257,12 @@ export default function EditMissionPage() {
                       <img
                         src={brands.find(b => b.id === mission.brand_id)?.brand_profiles?.avatar_url}
                         alt="Marka logosu"
-                        className="w-10 h-10 rounded-full border"
+                        className="w-10 h-10 rounded-full border object-contain bg-white"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full border bg-slate-100 grid place-items-center text-slate-400 text-xs">Logo</div>
+                      <div className="w-10 h-10 rounded-full border bg-slate-100 grid place-items-center text-slate-400 text-xs">
+                        {brands.find(b => b.id === mission.brand_id)?.name?.charAt(0) || 'M'}
+                      </div>
                     )}
                     <Button variant="outline" onClick={() => router.push('/brands')}>Marka profilini düzenle</Button>
                   </div>
@@ -255,7 +298,10 @@ export default function EditMissionPage() {
                 <Input
                   type="number"
                   value={mission.reward_qp || 0}
-                  onChange={(e) => setMission({ ...mission, reward_qp: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => {
+                    setMission({ ...mission, reward_qp: parseInt(e.target.value) || 0 });
+                    setFormData(prev => ({ ...prev, reward_qp: parseInt(e.target.value) || 0 }));
+                  }}
                   placeholder="0"
                   min="0"
                 />
@@ -267,7 +313,10 @@ export default function EditMissionPage() {
                 </label>
                 <Textarea
                   value={mission.description || ""}
-                  onChange={(e) => setMission({ ...mission, description: e.target.value })}
+                  onChange={(e) => {
+                    setMission({ ...mission, description: e.target.value });
+                    setFormData(prev => ({ ...prev, description: e.target.value }));
+                  }}
                   placeholder="Görev açıklamasını girin"
                   rows={4}
                 />
@@ -325,7 +374,10 @@ export default function EditMissionPage() {
                 <div className="flex gap-2">
                   <Input
                     value={mission.cover_url || ""}
-                    onChange={(e) => setMission({ ...mission, cover_url: e.target.value })}
+                    onChange={(e) => {
+                      setMission({ ...mission, cover_url: e.target.value });
+                      setFormData(prev => ({ ...prev, cover_url: e.target.value }));
+                    }}
                     placeholder="https://example.com/cover.jpg"
                     className="flex-1"
                   />
@@ -385,7 +437,10 @@ export default function EditMissionPage() {
                 <Input
                   type="datetime-local"
                   value={mission.starts_at ? new Date(mission.starts_at).toISOString().slice(0, 16) : ""}
-                  onChange={(e) => setMission({ ...mission, starts_at: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                  onChange={(e) => {
+                    setMission({ ...mission, starts_at: e.target.value ? new Date(e.target.value).toISOString() : undefined });
+                    setFormData(prev => ({ ...prev, starts_at: e.target.value || "" }));
+                  }}
                 />
               </div>
 
@@ -396,14 +451,28 @@ export default function EditMissionPage() {
                 <Input
                   type="datetime-local"
                   value={mission.ends_at ? new Date(mission.ends_at).toISOString().slice(0, 16) : ""}
-                  onChange={(e) => setMission({ ...mission, ends_at: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                  onChange={(e) => {
+                    setMission({ ...mission, ends_at: e.target.value ? new Date(e.target.value).toISOString() : undefined });
+                    setFormData(prev => ({ ...prev, ends_at: e.target.value || "" }));
+                  }}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Sidebar */}
+        {/* Mobile Preview */}
+        <div className="card p-6">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Mobil Önizleme</h3>
+            <p className="text-sm text-slate-600">Görevinizin mobil uygulamada nasıl görüneceğini buradan kontrol edebilirsiniz.</p>
+          </div>
+          <div className="flex justify-center">
+            <MobileMissionPreview formData={formData} />
+          </div>
+        </div>
+        
+        {/* Status Sidebar */}
         <div className="space-y-6">
           <div className="card p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">Durum</h3>

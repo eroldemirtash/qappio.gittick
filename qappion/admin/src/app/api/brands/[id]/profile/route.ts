@@ -49,6 +49,7 @@ export async function POST(
     // Whitelist only columns known to exist in brand_profiles
     const profileDataFull: Record<string, any> = {
       brand_id: resolvedParams.id,
+      user_id: body.user_id || null, // Admin için user_id null olabilir
       display_name: body.display_name,
       category: body.category,
       description: body.description,
@@ -75,6 +76,7 @@ export async function POST(
     // Strict allowlist for broad compatibility across environments
     const allowedColumns = new Set([
       "brand_id",
+      "user_id",
       "display_name",
       "category",
       "description",
@@ -107,7 +109,7 @@ export async function POST(
     for (let i = 0; i < 6; i++) {
       const res = await s
         .from("brand_profiles")
-        .upsert(attemptData, { onConflict: 'brand_id' })
+        .upsert(attemptData, { onConflict: 'brand_id,user_id' })
         .select()
         .single();
       data = res.data; error = res.error;
@@ -239,11 +241,13 @@ export async function GET(
       .from("brand_profiles")
       .select("*")
       .eq("brand_id", resolvedParams.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     const brandsRes = await s
       .from("brands")
-      .select("id, name, website_url, socials, logo_url, cover_url")
+      .select("id, name, logo_url, cover_url, socials")
       .eq("id", resolvedParams.id)
       .maybeSingle();
 
@@ -270,7 +274,7 @@ export async function GET(
         phone: "",
         avatar_url: null,
         cover_url: null,
-        website: brand?.website_url || "",
+        website: "",
         social_instagram: urlToHandle('instagram', brand?.socials?.instagram),
         social_twitter: urlToHandle('twitter', brand?.socials?.twitter),
         social_facebook: urlToHandle('facebook', brand?.socials?.facebook),
@@ -294,7 +298,7 @@ export async function GET(
     const item = {
       ...(data || {}),
       brand_id: resolvedParams.id,
-      website: (data as any)?.website || brand?.website_url || "",
+      website: (data as any)?.website || "",
       social_instagram: (data as any)?.social_instagram || urlToHandle('instagram', brand?.socials?.instagram),
       social_twitter:   (data as any)?.social_twitter   || urlToHandle('twitter', brand?.socials?.twitter),
       social_facebook:  (data as any)?.social_facebook  || urlToHandle('facebook', brand?.socials?.facebook),

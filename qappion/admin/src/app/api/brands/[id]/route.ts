@@ -10,37 +10,48 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const s = sbAdmin();
     
-    const { data, error } = await s
+    // Önce brands tablosundan temel veri
+    const { data: brandData, error: brandError } = await s
       .from("brands")
-      .select(`
-        id,
-        name,
-        is_active,
-        created_at,
-        brand_profiles (
-          logo_url,
-          avatar_url,
-          display_name,
-          category,
-          description,
-          email,
-          phone,
-          cover_url,
-          website,
-          social_instagram,
-          social_twitter,
-          social_facebook,
-          social_linkedin,
-          license_plan,
-          license_start,
-          license_end,
-          license_fee,
-          features,
-          address
-        )
-      `)
+      .select("id, name, is_active, created_at")
       .eq("id", id)
+      .single();
+
+    if (brandError || !brandData) {
+      throw new Error(`Brand not found: ${brandError?.message || 'No data'}`);
+    }
+
+    // Sonra brand_profiles tablosundan profil verisi (en son olanı al)
+    const { data: profileData, error: profileError } = await s
+      .from("brand_profiles")
+      .select(`
+        logo_url,
+        avatar_url,
+        display_name,
+        category,
+        description,
+        email,
+        phone,
+        cover_url,
+        website,
+        social_instagram,
+        social_twitter,
+        social_facebook,
+        social_linkedin,
+        license_plan,
+        license_start,
+        license_end,
+        license_fee,
+        features,
+        address
+      `)
+      .eq("brand_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
+
+    const data = { ...brandData, brand_profiles: profileData };
+    const error = profileError;
 
     if (!error && data) {
       // Normalize for edit form: ensure brand_profiles exists and fallbacks filled
@@ -73,19 +84,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return Response.json({ item }, { headers: { "cache-control": "no-store" }});
     }
 
-    // Fallback: try without relation
-    const fallback = await s
-      .from("brands")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (!fallback.error && fallback.data) {
-      return Response.json({ item: fallback.data }, { headers: { "cache-control": "no-store" }});
-    }
-
     // Final fallback: keep UI functional (Stability First)
-    console.error("BRAND_GET_ERROR:", (error || fallback.error)?.message);
+    console.error("BRAND_GET_ERROR:", error?.message);
     const mock = {
       id,
       name: "Yeni Marka",
